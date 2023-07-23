@@ -64,6 +64,22 @@ const WALLET_FILE_VERSION: u32 = 0;
 
 //TODO the wallet file format is probably best handled with sqlite
 
+
+
+// Work
+// Phase 1:
+// Add RPC ito Wallet.
+// Add RPCConfig to setup correct RPC params.
+// Move free floating functions to util
+// Remove redundant subroutines.
+// Add more docs.
+
+// Phase 2:
+// Transform the wallet to sync with descriptor in bitcoin core. instead of importing initial addresses.
+// separate the privkeys from wallet struct into separate struct called signer.
+// Encrypt the signer and and store it separately in a file. This file would be loaded, decrypted and used to sign stuffs.
+// Keep the signer API similar to BDK, which will allow to easily switch to BDK's framework later.
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct WalletFileData {
     version: u32,
