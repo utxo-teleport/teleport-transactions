@@ -36,7 +36,12 @@ use teleport::{
 #[structopt(name = "teleport", about = "A tool for CoinSwap")]
 struct ArgsWithWalletFile {
     /// Wallet file
-    #[structopt(default_value = "wallet.teleport", parse(from_os_str), long)]
+    #[structopt(
+        default_value = "wallet.teleport",
+        parse(from_os_str),
+        long,
+        short = "w"
+    )]
     wallet_file_name: PathBuf,
 
     /// Dont broadcast transactions, only output their transaction hex string
