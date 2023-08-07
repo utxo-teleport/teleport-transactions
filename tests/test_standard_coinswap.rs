@@ -1,4 +1,5 @@
 use bitcoin::util::amount::Amount;
+use bitcoin::util::amount::Amount;
 use bitcoincore_rpc::{Client, RpcApi};
 
 use bip39::Mnemonic;
@@ -11,6 +12,7 @@ use teleport::{
 use serde_json::Value;
 
 use std::{
+    fs,
     convert::TryFrom,
     path::PathBuf,
     sync::{Arc, RwLock},
@@ -28,6 +30,10 @@ static MAKER2: &str = "tests/maker-wallet-2";
 fn create_wallet_and_import(filename: PathBuf) -> Wallet {
     let mnemonic = Mnemonic::generate(12).unwrap();
     let seedphrase = mnemonic.to_string();
+
+    if filename.exists() {
+        fs::remove_file(&filename).unwrap();
+    }
 
     let mut wallet = Wallet::init(
         &filename,
