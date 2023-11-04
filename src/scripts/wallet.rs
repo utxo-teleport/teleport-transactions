@@ -374,7 +374,6 @@ pub fn print_fidelity_bond_address(
         NaiveDateTime::from_timestamp_opt(unix_locktime, 0)
             .expect("expected")
             .format("%Y-%m-%d")
-            .to_string()
     );
     println!("{}", addr);
     Ok(())
