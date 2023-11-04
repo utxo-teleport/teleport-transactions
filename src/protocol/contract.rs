@@ -279,9 +279,9 @@ pub fn check_hashvalues_are_equal(message: &ProofOfFunding) -> Result<Hash160, C
         .confirmed_funding_txes
         .iter()
         .map(|funding_info| {
-            Ok(read_hashvalue_from_contract(
+            read_hashvalue_from_contract(
                 &funding_info.contract_redeemscript,
-            )?)
+            )
         })
         .collect::<Result<Vec<_>, ContractError>>()?;
 
