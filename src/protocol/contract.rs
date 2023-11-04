@@ -143,9 +143,9 @@ pub fn check_reedemscript_is_multisig(redeemscript: &Script) -> Result<(), Contr
     ms_rs_bytes.splice(2..35, PUB_PLACEHOLDER.iter().cloned());
     ms_rs_bytes.splice(36..69, PUB_PLACEHOLDER.iter().cloned());
     if ms_rs_bytes != template_ms_rs {
-        return Err(ContractError::Protocol(
+        Err(ContractError::Protocol(
             "redeemscript not matching multisig template",
-        ));
+        ))
     } else {
         Ok(())
     }
@@ -159,9 +159,9 @@ pub fn check_multisig_has_pubkey(
     let (pubkey1, pubkey2) = read_pubkeys_from_multisig_redeemscript(redeemscript)?;
     let my_pubkey = calculate_pubkey_from_nonce(tweakable_point, nonce)?;
     if pubkey1 != my_pubkey && pubkey2 != my_pubkey {
-        return Err(ContractError::Protocol(
+        Err(ContractError::Protocol(
             "wrong pubkeys in multisig_redeemscript",
-        ));
+        ))
     } else {
         Ok(())
     }
@@ -175,9 +175,9 @@ pub fn check_hashlock_has_pubkey(
     let contract_hashlock_pubkey = read_hashlock_pubkey_from_contract(contract_redeemscript)?;
     let derived_hashlock_pubkey = calculate_pubkey_from_nonce(tweakable_point, nonce)?;
     if contract_hashlock_pubkey != derived_hashlock_pubkey {
-        return Err(ContractError::Protocol(
+        Err(ContractError::Protocol(
             "contract hashlock pubkey doesnt match with key derived from nonce",
-        ));
+        ))
     } else {
         Ok(())
     }
