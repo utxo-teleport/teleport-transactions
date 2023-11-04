@@ -370,7 +370,7 @@ pub fn create_senders_contract_tx(
             script_sig: ScriptBuf::new(),
         }],
         output: vec![TxOut {
-            script_pubkey: redeemscript_to_scriptpubkey(&contract_redeemscript),
+            script_pubkey: redeemscript_to_scriptpubkey(contract_redeemscript),
             // TODO: Mining fee for contract tx is hard coded here. Make it configurable.
             value: input_value - 1000,
         }],
@@ -428,7 +428,7 @@ pub fn validate_contract_tx(
         return Err(ContractError::Protocol("not spending the funding outpoint"));
     }
     if receivers_contract_tx.output[0].script_pubkey
-        != redeemscript_to_scriptpubkey(&contract_redeemscript)
+        != redeemscript_to_scriptpubkey(contract_redeemscript)
     {
         return Err(ContractError::Protocol("doesnt pay to requested contract"));
     }
