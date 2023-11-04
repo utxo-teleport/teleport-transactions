@@ -164,7 +164,7 @@ fn main() -> Result<(), WalletError> {
             let maker_path = dirs::home_dir()
                 .expect("expect home dir")
                 .join(".teleport")
-                .join(&maker_id); // ex: tests/temp-files/ghytredi/maker6102
+                .join(maker_id); // ex: tests/temp-files/ghytredi/maker6102
             let mut maker_rpc_config = RPCConfig::default();
             maker_rpc_config.wallet_name = maker_id.to_string();
             let onion_addrs = "myhiddenserviceaddress.onion:6102".to_string(); // A dummy addrs for now.
