@@ -284,7 +284,7 @@ pub fn display_wallet_balance(
         }
     }
 
-    if fidelity_bond_utxos.len() > 0 {
+    if !fidelity_bond_utxos.is_empty() {
         println!("= fidelity bond coins =");
         println!(
             "{:16} {:24} {:<7} {:<11} {:<8} {:6}",
