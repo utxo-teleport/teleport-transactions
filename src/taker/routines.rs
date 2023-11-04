@@ -234,10 +234,10 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
     this_maker: &OfferAndAddress,
     funding_tx_infos: &Vec<FundingTxInfo>,
     next_peer_multisig_pubkeys: &Vec<PublicKey>,
-    next_peer_hashlock_pubkeys: &Vec<PublicKey>,
+    next_peer_hashlock_pubkeys: &[PublicKey],
     next_maker_refund_locktime: u16,
     next_maker_fee_rate: u64,
-    this_maker_contract_txes: &Vec<Transaction>,
+    this_maker_contract_txes: &[Transaction],
     hashvalue: Hash160,
 ) -> Result<(ContractSigsAsRecvrAndSender, Vec<ScriptBuf>), TakerError> {
     send_message(
