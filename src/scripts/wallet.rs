@@ -217,7 +217,7 @@ pub fn display_wallet_balance(
             println!(
                 "outgoing balance = {}\nhashvalue = {}",
                 outgoing_swapcoins_balance,
-                hashvalue.to_string()
+                hashvalue
             );
         }
     }
