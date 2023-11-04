@@ -103,11 +103,11 @@ impl Maker {
 
         // Load if exists, else create new.
         let mut wallet = if wallet_file.exists() {
-            Wallet::load(&rpc_config, wallet_file)?
+            Wallet::load(rpc_config, wallet_file)?
         } else {
             let mnemonic = Mnemonic::generate(12).unwrap();
             let seedphrase = mnemonic.to_string();
-            Wallet::init(wallet_file, &rpc_config, seedphrase, "".to_string())?
+            Wallet::init(wallet_file, rpc_config, seedphrase, "".to_string())?
         };
         wallet.sync()?;
         Ok(Self {
@@ -133,7 +133,7 @@ impl Maker {
     /// Checks consistency of the [ProofOfFunding] message and return the Hashvalue
     /// used in hashlock transaction.
     pub fn verify_proof_of_funding(&self, message: &ProofOfFunding) -> Result<Hash160, MakerError> {
-        if message.confirmed_funding_txes.len() == 0 {
+        if message.confirmed_funding_txes.is_empty() {
             return Err(MakerError::General("No funding txs provided by Taker"));
         }
 
@@ -205,7 +205,7 @@ impl Maker {
             }
         }
 
-        Ok(check_hashvalues_are_equal(&message)?)
+        Ok(check_hashvalues_are_equal(message)?)
     }
 
     /// Verify the contract transaction for Sender and return the signatures.
@@ -359,7 +359,7 @@ pub fn check_for_broadcasted_contracts(maker: Arc<Maker>) -> Result<(), MakerErr
                                 );
                             }
                         }
-                        failed_swap_ip.push(ip.clone());
+                        failed_swap_ip.push(*ip);
 
                         // Spawn a separate thread to wait for contract maturity and broadcasting timelocked.
                         let maker_clone = maker.clone();
@@ -379,7 +379,7 @@ pub fn check_for_broadcasted_contracts(maker: Arc<Maker>) -> Result<(), MakerErr
 
             // Clear the state entry here
             for ip in failed_swap_ip.iter() {
-                lock_onstate.remove(&ip);
+                lock_onstate.remove(ip);
             }
         } // All locks are cleared here.
 
@@ -444,7 +444,7 @@ pub fn check_for_idle_states(maker: Arc<Maker>) -> Result<(), MakerError> {
                         let incoming_contract = ic_sc.get_fully_signed_contract_tx().unwrap();
                         incomings.push((ic_sc.get_multisig_redeemscript(), incoming_contract));
                     }
-                    bad_ip.push(ip.clone());
+                    bad_ip.push(*ip);
                     // Spawn a separate thread to wait for contract maturity and broadcasting timelocked.
                     let maker_clone = maker.clone();
                     log::info!(
@@ -462,7 +462,7 @@ pub fn check_for_idle_states(maker: Arc<Maker>) -> Result<(), MakerError> {
 
             // Clear the state entry here
             for ip in bad_ip.iter() {
-                lock_on_state.remove(&ip);
+                lock_on_state.remove(ip);
             }
         } // All locks are cleared here
 

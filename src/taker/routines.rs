@@ -291,7 +291,7 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
         .iter()
         .map(|funding_info| {
             let funding_output_index =
-                find_funding_output_index(&funding_info).map_err(ProtocolError::Contract)?;
+                find_funding_output_index(funding_info).map_err(ProtocolError::Contract)?;
             Ok(funding_info
                 .funding_tx
                 .output

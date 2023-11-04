@@ -70,7 +70,7 @@ fn parse_short_form_coin(s: &str) -> Option<CoinToSpend> {
     }
     let prefix = String::from(&s[0..6]);
     let suffix = String::from(&s[8..14]);
-    let vout = *(&s[15..].parse::<u32>().ok()?);
+    let vout = s[15..].parse::<u32>().ok()?;
     Some(CoinToSpend::ShortForm {
         prefix,
         suffix,

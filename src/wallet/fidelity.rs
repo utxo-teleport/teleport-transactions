@@ -67,7 +67,7 @@ impl FromStr for YearAndMonth {
         }
         let year = String::from(&s[..4]).parse::<u32>()?;
         let month = String::from(&s[5..]).parse::<u32>()?;
-        if 2020 <= year && year <= 2079 && 1 <= month && month <= 12 {
+        if (2020..=2079).contains(&year) && (1..=12).contains(&month) {
             Ok(YearAndMonth { year, month })
         } else {
             Err(YearAndMonthError::OutOfRange)
@@ -301,7 +301,7 @@ fn create_timelocked_redeemscript(locktime: i64, pubkey: &PublicKey) -> ScriptBu
 }
 
 pub fn read_locktime_from_timelocked_redeemscript(redeemscript: &Script) -> Option<i64> {
-    if let Instruction::PushBytes(locktime_bytes) = redeemscript.instructions().nth(0)?.ok()? {
+    if let Instruction::PushBytes(locktime_bytes) = redeemscript.instructions().next()?.ok()? {
         let mut u8slice: [u8; 8] = [0; 8];
         u8slice[..locktime_bytes.len()].copy_from_slice(locktime_bytes.as_bytes());
         Some(i64::from_le_bytes(u8slice))
