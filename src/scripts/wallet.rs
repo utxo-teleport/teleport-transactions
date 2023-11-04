@@ -154,9 +154,7 @@ pub fn display_wallet_balance(
             if long_form { &"" } else { &addr[addr.len() - 10..addr.len()] },
             if utxo.witness_script.is_some() {
                 "swapcoin"
-            } else {
-                if utxo.descriptor.is_some() { "seed" } else { "timelock" }
-            },
+            } else if utxo.descriptor.is_some() { "seed" } else { "timelock" },
             utxo.confirmations,
             utxo.amount
         );
