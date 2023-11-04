@@ -95,7 +95,7 @@ impl WalletStore {
     /// Load existing file, updates it, writes it back.
     /// errors if path does not exist.
     pub fn write_to_disk(&self, path: &PathBuf) -> Result<(), WalletError> {
-        let mut file_data = FileData::load_from_file(&path)?;
+        let mut file_data = FileData::load_from_file(path)?;
         file_data.incoming_swapcoins = self
             .incoming_swapcoins
             .iter()
@@ -108,7 +108,7 @@ impl WalletStore {
             .map(|os| os.1)
             .cloned()
             .collect();
-        Ok(file_data.save_to_file(&path)?)
+        Ok(file_data.save_to_file(path)?)
     }
 
     /// Reads from a path. Errors if path doesn't exist.

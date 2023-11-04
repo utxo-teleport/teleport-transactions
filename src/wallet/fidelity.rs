@@ -295,7 +295,7 @@ fn create_timelocked_redeemscript(locktime: i64, pubkey: &PublicKey) -> ScriptBu
         .push_int(locktime)
         .push_opcode(opcodes::all::OP_CLTV)
         .push_opcode(opcodes::all::OP_DROP)
-        .push_key(&pubkey)
+        .push_key(pubkey)
         .push_opcode(opcodes::all::OP_CHECKSIG)
         .into_script()
 }
@@ -350,7 +350,7 @@ fn get_timelocked_redeemscript_from_index<C: Context + Signing>(
         .private_key;
     let pubkey = PublicKey {
         compressed: true,
-        inner: privkey.public_key(&secp),
+        inner: privkey.public_key(secp),
     };
     let locktime = get_locktime_from_index(index);
     create_timelocked_redeemscript(locktime, &pubkey)

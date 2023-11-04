@@ -343,7 +343,7 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
             .zip(funding_tx_infos.iter().map(|fi| &fi.contract_redeemscript))
     {
         validate_contract_tx(
-            &receivers_contract_tx,
+            receivers_contract_tx,
             Some(&contract_tx.input[0].previous_output),
             contract_redeemscript,
         )
