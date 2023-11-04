@@ -161,7 +161,7 @@ pub(crate) async fn req_sigs_for_sender_once<S: SwapCoin>(
         .iter()
         .zip(outgoing_swapcoins.iter())
     {
-        outgoing_swapcoin.verify_contract_tx_sender_sig(&sig)?;
+        outgoing_swapcoin.verify_contract_tx_sender_sig(sig)?;
     }
     log::info!("<=== Received ContractSigsForSender from {}", maker_address);
     Ok(contract_sigs_for_sender)
@@ -220,7 +220,7 @@ pub(crate) async fn req_sigs_for_recvr_once<S: SwapCoin>(
         .iter()
         .zip(incoming_swapcoins.iter())
     {
-        swapcoin.verify_contract_tx_receiver_sig(&sig)?;
+        swapcoin.verify_contract_tx_receiver_sig(sig)?;
     }
 
     log::info!("<=== Received ContractSigsForRecvr from {}", maker_address);
