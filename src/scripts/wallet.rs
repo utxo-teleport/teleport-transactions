@@ -52,7 +52,7 @@ pub fn generate_wallet(
         return Err(e);
     }
 
-    println!("Write down this seed phrase =\n{}", mnemonic.to_string());
+    println!("Write down this seed phrase =\n{}", mnemonic);
     if !passphrase.trim().is_empty() {
         println!("And this passphrase =\n\"{}\"", passphrase);
     }
