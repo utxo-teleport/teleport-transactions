@@ -304,11 +304,11 @@ pub fn check_for_broadcasted_contracts(maker: Arc<Maker>) -> Result<(), MakerErr
                 // No need to check for other contracts in the connection state, if any one of them
                 // is ever observed in the mempool/block, run recovery routine.
                 for txid in txids_to_watch {
-                    if let Ok(_) = maker
+                    if maker
                         .wallet
                         .read()?
                         .rpc
-                        .get_raw_transaction_info(&txid, None)
+                        .get_raw_transaction_info(&txid, None).is_ok()
                     {
                         let mut outgoings = Vec::new();
                         let mut incomings = Vec::new();
@@ -483,12 +483,12 @@ pub fn recover_from_swap(
 ) {
     // broadcast all the incoming contracts and remove them from the wallet.
     for (incoming_reedemscript, tx) in incomings {
-        if let Ok(_) = maker
+        if maker
             .wallet
             .read()
             .unwrap()
             .rpc
-            .get_raw_transaction_info(&tx.txid(), None)
+            .get_raw_transaction_info(&tx.txid(), None).is_ok()
         {
             log::info!(
                 "[{}] Incoming Contract Already Broadcasted",
@@ -527,12 +527,12 @@ pub fn recover_from_swap(
 
     //broadcast all the outgoing contracts
     for ((_, tx), _) in outgoings.iter() {
-        if let Ok(_) = maker
+        if maker
             .wallet
             .read()
             .unwrap()
             .rpc
-            .get_raw_transaction_info(&tx.txid(), None)
+            .get_raw_transaction_info(&tx.txid(), None).is_ok()
         {
             log::info!(
                 "[{}] Outgoing Contract already broadcasted",

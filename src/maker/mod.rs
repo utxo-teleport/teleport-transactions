@@ -193,7 +193,7 @@ pub async fn start_maker_server(maker: Arc<Maker>) -> Result<(), MakerError> {
                                 log::info!("[{}] Connection closed by peer", maker_clone.config.port);
                                 break;
                             }
-                            Ok(_n) => (),
+                            Ok(_) => (),
                             Err(e) => {
                                 log::error!("error reading from socket: {:?}", e);
                                 break;

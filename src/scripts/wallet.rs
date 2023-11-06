@@ -118,15 +118,10 @@ pub fn display_wallet_balance(
     let utxos_incl_fbonds = wallet.list_unspent_from_wallet(false, true)?;
     let (mut utxos, mut fidelity_bond_utxos): (Vec<_>, Vec<_>) =
         utxos_incl_fbonds.iter().partition(|(_, usi)| {
-            if let UTXOSpendInfo::FidelityBondCoin {
+            !matches!(usi, UTXOSpendInfo::FidelityBondCoin {
                 index: _,
                 input_value: _,
-            } = usi
-            {
-                false
-            } else {
-                true
-            }
+            })
         });
 
     utxos.sort_by(|(a, _), (b, _)| b.confirmations.cmp(&a.confirmations));

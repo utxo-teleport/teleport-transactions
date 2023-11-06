@@ -402,13 +402,10 @@ impl Wallet {
         let fidelity_bond_utxos = list_unspent_result
             .iter()
             .filter(|(utxo, _)| utxo.confirmations > 0)
-            .filter(|(_, usi)| match usi {
-                UTXOSpendInfo::FidelityBondCoin {
-                    index: _,
-                    input_value: _,
-                } => true,
-                _ => false,
-            })
+            .filter(|(_, usi)| matches!(usi, UTXOSpendInfo::FidelityBondCoin {
+                index: _,
+                input_value: _,
+            }))
             .collect::<Vec<&(ListUnspentResultEntry, UTXOSpendInfo)>>();
         let fidelity_bond_values = fidelity_bond_utxos
             .iter()

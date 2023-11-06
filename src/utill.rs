@@ -77,7 +77,7 @@ pub async fn read_message(
 
 /// Apply the maker's privatekey to swapcoins, and check it's the correct privkey for corresponding pubkey.
 pub fn check_and_apply_maker_private_keys<S: SwapCoin>(
-    swapcoins: &mut Vec<S>,
+    swapcoins: &mut [S],
     swapcoin_private_keys: &[MultisigPrivkey],
 ) -> Result<(), WalletError> {
     for (swapcoin, swapcoin_private_key) in swapcoins.iter_mut().zip(swapcoin_private_keys.iter()) {

@@ -227,7 +227,7 @@ impl Wallet {
                 "incoming swapcoin count = {}",
                 self.store.incoming_swapcoins.len()
             );
-            for (_multisig_redeemscript, swapcoin) in &self.store.incoming_swapcoins {
+            for swapcoin in self.store.incoming_swapcoins.values() {
                 println!(
                     "{} incoming_swapcoin_contract hashvalue={} locktime={} contract_txid={}",
                     Address::p2wsh(&swapcoin.contract_redeemscript, self.store.network),
@@ -246,7 +246,7 @@ impl Wallet {
                 "outgoing swapcoin count = {}",
                 self.store.outgoing_swapcoins.len()
             );
-            for (_multisig_redeemscript, swapcoin) in &self.store.outgoing_swapcoins {
+            for swapcoin in self.store.outgoing_swapcoins.values() {
                 println!(
                     "{} outgoing_swapcoin_contract hashvalue={} locktime={} contract_txid={}",
                     Address::p2wsh(&swapcoin.contract_redeemscript, self.store.network),
@@ -686,7 +686,7 @@ impl Wallet {
         }
 
         if u.descriptor.is_none() {
-            if option_contract_scriptpubkeys_outgoing_swapcoins.is_some() {
+            if let Some(..) = option_contract_scriptpubkeys_outgoing_swapcoins {
                 if let Some(swapcoin) = option_contract_scriptpubkeys_outgoing_swapcoins
                     .unwrap()
                     .get(&u.script_pub_key)
@@ -700,7 +700,7 @@ impl Wallet {
                     }
                 }
             }
-            if option_contract_scriptpubkeys_incoming_swapcoins.is_some() {
+            if let Some(..) = option_contract_scriptpubkeys_incoming_swapcoins {
                 if let Some(swapcoin) = option_contract_scriptpubkeys_incoming_swapcoins
                     .unwrap()
                     .get(&u.script_pub_key)
@@ -1295,12 +1295,12 @@ impl Wallet {
     pub fn import_tx_with_merkleproof(
         &self,
         tx: &Transaction,
-        merkleproof: &String,
+        merkleproof: &str,
     ) -> Result<(), WalletError> {
         let rawtx_hex = serialize_hex(&tx);
         self.rpc.call(
             "importprunedfunds",
-            &[Value::String(rawtx_hex), Value::String(merkleproof.clone())],
+            &[Value::String(rawtx_hex), Value::String(merkleproof.to_owned())],
         )?;
         log::debug!(target: "wallet", "import_tx_with_merkleproof txid={}", tx.txid());
         Ok(())

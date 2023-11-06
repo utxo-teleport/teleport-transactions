@@ -254,8 +254,7 @@ impl Maker {
             let funding_output = funding_info
                 .funding_tx
                 .output
-                .iter()
-                .nth(funding_output_index as usize)
+                .get(funding_output_index as usize)
                 .expect("funding output expected at this index");
 
             self.wallet
@@ -326,8 +325,7 @@ impl Maker {
             let txout = fi
                 .funding_tx
                 .output
-                .iter()
-                .nth(index as usize)
+                .get(index as usize)
                 .expect("output at index expected");
             acc + txout.value
         });

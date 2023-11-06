@@ -295,8 +295,7 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
             Ok(funding_info
                 .funding_tx
                 .output
-                .iter()
-                .nth(funding_output_index as usize)
+                .get(funding_output_index as usize)
                 .expect("funding output expected")
                 .value)
         })

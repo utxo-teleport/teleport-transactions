@@ -1050,8 +1050,7 @@ impl Taker {
                     .expect("funding txout output doesn't match with mutlsig scriptpubkey");
                 makers_funding_tx
                     .output
-                    .iter()
-                    .nth(index)
+                    .get(index)
                     .expect("output expected at that index")
                     .value
             })
@@ -1680,10 +1679,10 @@ impl Taker {
 
         // Broadcasted incoming contracts and remove them from the wallet.
         for (contract_tx, redeemscript) in &incoming_contracts {
-            if let Ok(_) = self
+            if self
                 .wallet
                 .rpc
-                .get_raw_transaction_info(&contract_tx.txid(), None)
+                .get_raw_transaction_info(&contract_tx.txid(), None).is_ok()
             {
                 log::info!("Incoming Contract already broadacsted");
             } else {
@@ -1705,10 +1704,10 @@ impl Taker {
         // Broadcast the Outgoing Contracts
         for outgoing in outgoings {
             let contract_tx = outgoing.get_fully_signed_contract_tx()?;
-            if let Ok(_) = self
+            if self
                 .wallet
                 .rpc
-                .get_raw_transaction_info(&contract_tx.txid(), None)
+                .get_raw_transaction_info(&contract_tx.txid(), None).is_ok()
             {
                 log::info!("Outgoing Contract already broadcasted");
             } else {
