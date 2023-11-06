@@ -13,8 +13,8 @@ use coinswap::{
     taker::{SwapParams, Taker, TakerBehavior},
     utill::setup_logger,
     wallet::{
-        fidelity::YearAndMonth, CoinToSpend, Destination, DisplayAddressType,
-        SendAmount, WalletError,
+        fidelity::YearAndMonth, CoinToSpend, Destination, DisplayAddressType, SendAmount,
+        WalletError,
     },
 };
 

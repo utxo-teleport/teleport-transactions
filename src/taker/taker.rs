@@ -948,7 +948,7 @@ impl Taker {
                     &self.ongoing_swap_state.watchonly_swapcoins
                         [self.ongoing_swap_state.watchonly_swapcoins.len() - 2]
                 };
-            
+
             match self
                 .req_sigs_for_recvr(
                     previous_maker_addr,
@@ -1682,7 +1682,8 @@ impl Taker {
             if self
                 .wallet
                 .rpc
-                .get_raw_transaction_info(&contract_tx.txid(), None).is_ok()
+                .get_raw_transaction_info(&contract_tx.txid(), None)
+                .is_ok()
             {
                 log::info!("Incoming Contract already broadacsted");
             } else {
@@ -1707,7 +1708,8 @@ impl Taker {
             if self
                 .wallet
                 .rpc
-                .get_raw_transaction_info(&contract_tx.txid(), None).is_ok()
+                .get_raw_transaction_info(&contract_tx.txid(), None)
+                .is_ok()
             {
                 log::info!("Outgoing Contract already broadcasted");
             } else {

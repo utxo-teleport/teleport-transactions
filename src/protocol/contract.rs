@@ -278,11 +278,7 @@ pub fn check_hashvalues_are_equal(message: &ProofOfFunding) -> Result<Hash160, C
     let hashvalues = message
         .confirmed_funding_txes
         .iter()
-        .map(|funding_info| {
-            read_hashvalue_from_contract(
-                &funding_info.contract_redeemscript,
-            )
-        })
+        .map(|funding_info| read_hashvalue_from_contract(&funding_info.contract_redeemscript))
         .collect::<Result<Vec<_>, ContractError>>()?;
 
     if !hashvalues.iter().all(|value| value == &hashvalues[0]) {

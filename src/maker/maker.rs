@@ -308,7 +308,8 @@ pub fn check_for_broadcasted_contracts(maker: Arc<Maker>) -> Result<(), MakerErr
                         .wallet
                         .read()?
                         .rpc
-                        .get_raw_transaction_info(&txid, None).is_ok()
+                        .get_raw_transaction_info(&txid, None)
+                        .is_ok()
                     {
                         let mut outgoings = Vec::new();
                         let mut incomings = Vec::new();
@@ -488,7 +489,8 @@ pub fn recover_from_swap(
             .read()
             .unwrap()
             .rpc
-            .get_raw_transaction_info(&tx.txid(), None).is_ok()
+            .get_raw_transaction_info(&tx.txid(), None)
+            .is_ok()
         {
             log::info!(
                 "[{}] Incoming Contract Already Broadcasted",
@@ -532,7 +534,8 @@ pub fn recover_from_swap(
             .read()
             .unwrap()
             .rpc
-            .get_raw_transaction_info(&tx.txid(), None).is_ok()
+            .get_raw_transaction_info(&tx.txid(), None)
+            .is_ok()
         {
             log::info!(
                 "[{}] Outgoing Contract already broadcasted",

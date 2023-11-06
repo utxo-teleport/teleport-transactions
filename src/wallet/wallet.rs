@@ -1300,7 +1300,10 @@ impl Wallet {
         let rawtx_hex = serialize_hex(&tx);
         self.rpc.call(
             "importprunedfunds",
-            &[Value::String(rawtx_hex), Value::String(merkleproof.to_owned())],
+            &[
+                Value::String(rawtx_hex),
+                Value::String(merkleproof.to_owned()),
+            ],
         )?;
         log::debug!(target: "wallet", "import_tx_with_merkleproof txid={}", tx.txid());
         Ok(())
