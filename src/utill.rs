@@ -200,8 +200,10 @@ mod tests {
     };
 
     use serde_json::json;
-    use tokio::io::AsyncReadExt;
-    use tokio::net::{TcpListener, TcpStream};
+    use tokio::{
+        io::AsyncReadExt,
+        net::{TcpListener, TcpStream},
+    };
 
     use super::*;
 
