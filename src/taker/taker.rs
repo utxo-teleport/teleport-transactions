@@ -1483,8 +1483,8 @@ impl Taker {
         maker_address: &MakerAddress,
         index: usize,
         outgoing_privkeys: &mut Option<Vec<MultisigPrivkey>>,
-        senders_multisig_redeemscripts: &Vec<ScriptBuf>,
-        receivers_multisig_redeemscripts: &Vec<ScriptBuf>,
+        senders_multisig_redeemscripts: &[ScriptBuf],
+        receivers_multisig_redeemscripts: &[ScriptBuf],
     ) -> Result<(), TakerError> {
         log::info!("Connecting to {}", maker_address);
         let mut socket = TcpStream::connect(maker_address.get_tcpstream_address()).await?;
