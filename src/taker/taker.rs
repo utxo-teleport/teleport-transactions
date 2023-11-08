@@ -811,7 +811,7 @@ impl Taker {
                         .outgoing_swapcoins
                         .iter()
                         .map(|os| os.get_contract_tx())
-                        .collect()
+                        .collect::<Vec<_>>()
                 } else {
                     self.ongoing_swap_state
                         .watchonly_swapcoins

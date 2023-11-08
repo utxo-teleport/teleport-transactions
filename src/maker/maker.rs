@@ -195,7 +195,7 @@ impl Maker {
             if !self.wallet.read()?.does_prevout_match_cached_contract(
                 &OutPoint {
                     txid: funding_info.funding_tx.txid(),
-                    vout: funding_output_index as u32,
+                    vout: funding_output_index,
                 },
                 &contract_spk,
             )? {

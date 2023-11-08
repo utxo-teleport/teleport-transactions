@@ -271,7 +271,7 @@ impl Maker {
             let receiver_contract_tx = create_receivers_contract_tx(
                 OutPoint {
                     txid: funding_info.funding_tx.txid(),
-                    vout: funding_output_index as u32,
+                    vout: funding_output_index,
                 },
                 funding_output.value,
                 &funding_info.contract_redeemscript,

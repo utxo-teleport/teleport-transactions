@@ -67,7 +67,7 @@ pub enum KeychainKind {
 }
 
 impl KeychainKind {
-    fn to_index(&self) -> u32 {
+    fn index_num(&self) -> u32 {
         match self {
             Self::External => 0,
             Self::Internal => 1,
@@ -498,7 +498,7 @@ impl Wallet {
                     .get_descriptor_info(&format!(
                         "wpkh({}/{}/*)",
                         wallet_xpub,
-                        keychain.to_index()
+                        keychain.index_num()
                     ))
                     .unwrap();
                 (*keychain, desc_info.descriptor)
@@ -686,11 +686,8 @@ impl Wallet {
         }
 
         if u.descriptor.is_none() {
-            if let Some(..) = option_contract_scriptpubkeys_outgoing_swapcoins {
-                if let Some(swapcoin) = option_contract_scriptpubkeys_outgoing_swapcoins
-                    .unwrap()
-                    .get(&u.script_pub_key)
-                {
+            if let Some(map) = option_contract_scriptpubkeys_outgoing_swapcoins {
+                if let Some(swapcoin) = map.get(&u.script_pub_key) {
                     let timelock = swapcoin.get_timelock();
                     if u.confirmations >= timelock.into() {
                         return Some(UTXOSpendInfo::TimelockContract {
@@ -700,11 +697,8 @@ impl Wallet {
                     }
                 }
             }
-            if let Some(..) = option_contract_scriptpubkeys_incoming_swapcoins {
-                if let Some(swapcoin) = option_contract_scriptpubkeys_incoming_swapcoins
-                    .unwrap()
-                    .get(&u.script_pub_key)
-                {
+            if let Some(map) = option_contract_scriptpubkeys_incoming_swapcoins {
+                if let Some(swapcoin) = map.get(&u.script_pub_key) {
                     if swapcoin.is_hash_preimage_known() && u.confirmations >= 1 {
                         return Some(UTXOSpendInfo::HashlockContract {
                             swapcoin_multisig_redeemscript: swapcoin.get_multisig_redeemscript(),
@@ -1000,7 +994,7 @@ impl Wallet {
                 continue;
             }
             let (_, addr_type, index) = ret.expect("its not none");
-            if addr_type != keychain.to_index() {
+            if addr_type != keychain.index_num() {
                 continue;
             }
             max_index = std::cmp::max(max_index, index);

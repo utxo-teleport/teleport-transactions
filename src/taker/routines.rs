@@ -233,11 +233,11 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
     socket_writer: &mut WriteHalf<'_>,
     this_maker: &OfferAndAddress,
     funding_tx_infos: &Vec<FundingTxInfo>,
-    next_peer_multisig_pubkeys: &Vec<PublicKey>,
-    next_peer_hashlock_pubkeys: &Vec<PublicKey>,
+    next_peer_multisig_pubkeys: &[PublicKey],
+    next_peer_hashlock_pubkeys: &[PublicKey],
     next_maker_refund_locktime: u16,
     next_maker_fee_rate: u64,
-    this_maker_contract_txes: &Vec<Transaction>,
+    this_maker_contract_txes: &[Transaction],
     hashvalue: Hash160,
 ) -> Result<(ContractSigsAsRecvrAndSender, Vec<ScriptBuf>), TakerError> {
     send_message(
@@ -374,8 +374,8 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
 pub(crate) async fn send_hash_preimage_and_get_private_keys(
     socket_reader: &mut BufReader<ReadHalf<'_>>,
     socket_writer: &mut WriteHalf<'_>,
-    senders_multisig_redeemscripts: &Vec<ScriptBuf>,
-    receivers_multisig_redeemscripts: &Vec<ScriptBuf>,
+    senders_multisig_redeemscripts: &[ScriptBuf],
+    receivers_multisig_redeemscripts: &[ScriptBuf],
     preimage: &Preimage,
 ) -> Result<PrivKeyHandover, TakerError> {
     send_message(

@@ -83,12 +83,12 @@ impl FromStr for CoinToSpend {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parsed_outpoint = OutPoint::from_str(s);
-        if let Ok(..) = parsed_outpoint {
-            Ok(CoinToSpend::LongForm(parsed_outpoint.unwrap()))
+        if let Ok(op) = parsed_outpoint {
+            Ok(CoinToSpend::LongForm(op))
         } else {
             let short_form = parse_short_form_coin(s);
-            if let Some(..) = short_form {
-                Ok(short_form.unwrap())
+            if let Some(cointospend) = short_form {
+                Ok(cointospend)
             } else {
                 Err(parsed_outpoint.err().unwrap())
             }
