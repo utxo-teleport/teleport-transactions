@@ -1,8 +1,8 @@
+/// Main server runtime for the Maker module.
+pub mod api;
 pub mod config;
 pub mod error;
 mod handlers;
-pub mod server;
-//mod server;
 
 use std::{
     net::Ipv4Addr,
@@ -20,12 +20,12 @@ use tokio::{
     time::sleep,
 };
 
-pub use server::{Maker, MakerBehavior};
+pub use api::{Maker, MakerBehavior};
 
 use crate::{
     maker::{
+        api::{check_for_broadcasted_contracts, check_for_idle_states, ConnectionState},
         handlers::handle_message,
-        server::{check_for_broadcasted_contracts, check_for_idle_states, ConnectionState},
     },
     market::directory::post_maker_address_to_directory_servers,
     protocol::messages::{MakerHello, MakerToTakerMessage, TakerToMakerMessage},
@@ -35,7 +35,12 @@ use crate::{
 
 use crate::maker::error::MakerError;
 
-/// Start the Maker server loop
+/// This function initializes and starts the Maker server, handling connections and various
+/// aspects of the Maker's behavior.
+///
+/// The `start_maker_server` function is the entry point for the Maker server. It initializes and
+/// starts the server, managing connections and ensuring the Maker's functionality.
+
 #[tokio::main]
 pub async fn start_maker_server(maker: Arc<Maker>) -> Result<(), MakerError> {
     log::debug!("Running maker with special behavior = {:?}", maker.behavior);
