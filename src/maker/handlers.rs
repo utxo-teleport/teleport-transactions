@@ -13,7 +13,7 @@ use crate::protocol::{
 };
 
 use crate::{
-    maker::maker::ExpectedMessage,
+    maker::server::ExpectedMessage,
     protocol::{
         contract::{
             calculate_coinswap_fee, create_receivers_contract_tx, find_funding_output_index,
@@ -32,7 +32,7 @@ use crate::{
 
 use super::{
     error::MakerError,
-    maker::{ConnectionState, Maker, MakerBehavior},
+    server::{ConnectionState, Maker, MakerBehavior},
 };
 
 /// The Global Handle Message function. Takes in a [Arc<Maker>] and handle messages

@@ -5,7 +5,7 @@ mod funding;
 mod rpc;
 mod storage;
 mod swapcoin;
-mod wallet;
+mod api;
 
 pub use direct_send::{CoinToSpend, Destination, SendAmount};
 pub use error::WalletError;
@@ -14,4 +14,4 @@ pub use storage::WalletStore;
 pub use swapcoin::{
     IncomingSwapCoin, OutgoingSwapCoin, SwapCoin, WalletSwapCoin, WatchOnlySwapCoin,
 };
-pub use wallet::{DisplayAddressType, UTXOSpendInfo, Wallet};
+pub use api::{DisplayAddressType, UTXOSpendInfo, Wallet};

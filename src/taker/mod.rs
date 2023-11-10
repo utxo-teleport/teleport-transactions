@@ -2,8 +2,8 @@ mod config;
 pub mod error;
 pub mod offers;
 mod routines;
-mod taker;
+mod api;
 
-pub use self::taker::TakerBehavior;
+pub use self::api::TakerBehavior;
 pub use config::TakerConfig;
-pub use taker::{SwapParams, Taker};
+pub use api::{SwapParams, Taker};

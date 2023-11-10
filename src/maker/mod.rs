@@ -1,7 +1,7 @@
 pub mod config;
 pub mod error;
 mod handlers;
-pub mod maker;
+pub mod server;
 //mod server;
 
 use std::{
@@ -20,12 +20,12 @@ use tokio::{
     time::sleep,
 };
 
-pub use maker::{Maker, MakerBehavior};
+pub use server::{Maker, MakerBehavior};
 
 use crate::{
     maker::{
         handlers::handle_message,
-        maker::{check_for_broadcasted_contracts, check_for_idle_states, ConnectionState},
+        server::{check_for_broadcasted_contracts, check_for_idle_states, ConnectionState},
     },
     market::directory::post_maker_address_to_directory_servers,
     protocol::messages::{MakerHello, MakerToTakerMessage, TakerToMakerMessage},
