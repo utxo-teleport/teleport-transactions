@@ -136,6 +136,16 @@ pub enum UTXOSpendInfo {
     },
 }
 
+type IncomingCoinsPair<'a> = (
+    Vec<(ListUnspentResultEntry, &'a IncomingSwapCoin)>,
+    Vec<(ListUnspentResultEntry, &'a OutgoingSwapCoin)>,
+);
+
+type OutgoingCoinsPair<'a> = (
+    Vec<(&'a IncomingSwapCoin, ListUnspentResultEntry)>,
+    Vec<(&'a OutgoingSwapCoin, ListUnspentResultEntry)>,
+);
+
 impl Wallet {
     pub fn display_addresses(&self, types: DisplayAddressType) -> Result<(), WalletError> {
         if types == DisplayAddressType::All || types == DisplayAddressType::MasterKey {
@@ -827,16 +837,7 @@ impl Wallet {
 
     pub fn find_incomplete_coinswaps(
         &self,
-    ) -> Result<
-        HashMap<
-            Hash160,
-            (
-                Vec<(ListUnspentResultEntry, &IncomingSwapCoin)>,
-                Vec<(ListUnspentResultEntry, &OutgoingSwapCoin)>,
-            ),
-        >,
-        WalletError,
-    > {
+    ) -> Result<HashMap<Hash160, IncomingCoinsPair>, WalletError> {
         self.rpc
             .call::<Value>("lockunspent", &[Value::Bool(true)])?;
 
@@ -848,13 +849,7 @@ impl Wallet {
             .map(|sc| sc.get_hashvalue())
             .collect::<HashSet<Hash160>>();
 
-        let mut incomplete_swapcoin_groups = HashMap::<
-            Hash160,
-            (
-                Vec<(ListUnspentResultEntry, &IncomingSwapCoin)>,
-                Vec<(ListUnspentResultEntry, &OutgoingSwapCoin)>,
-            ),
-        >::new();
+        let mut incomplete_swapcoin_groups = HashMap::<Hash160, IncomingCoinsPair>::new();
         let get_hashvalue = |s: &dyn SwapCoin| {
             let swapcoin_hashvalue = s.get_hashvalue();
             if completed_coinswap_hashvalues.contains(&swapcoin_hashvalue) {
@@ -935,15 +930,7 @@ impl Wallet {
 
     // live contract refers to a contract tx which has been broadcast
     // i.e. where there are UTXOs protected by contract_redeemscript's that we know about
-    pub fn find_live_contract_unspents(
-        &self,
-    ) -> Result<
-        (
-            Vec<(&IncomingSwapCoin, ListUnspentResultEntry)>,
-            Vec<(&OutgoingSwapCoin, ListUnspentResultEntry)>,
-        ),
-        WalletError,
-    > {
+    pub fn find_live_contract_unspents(&self) -> Result<OutgoingCoinsPair, WalletError> {
         // populate hashmaps where key is contract scriptpubkey and value is the swapcoin
         let contract_scriptpubkeys_incoming_swapcoins =
             self.create_contract_scriptpubkey_incoming_swapcoin_hashmap();
