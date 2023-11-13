@@ -37,9 +37,6 @@ use crate::maker::error::MakerError;
 
 /// This function initializes and starts the Maker server, handling connections and various
 /// aspects of the Maker's behavior.
-///
-/// The `start_maker_server` function is the entry point for the Maker server. It initializes and
-/// starts the server, managing connections and ensuring the Maker's functionality.
 
 #[tokio::main]
 pub async fn start_maker_server(maker: Arc<Maker>) -> Result<(), MakerError> {
