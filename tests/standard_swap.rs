@@ -13,6 +13,7 @@ use std::{thread, time::Duration};
 #[tokio::test]
 async fn test_standard_coinswap() {
     // ---- Setup ----
+    std::env::set_var("RUST_LOG", "info");
 
     // 2 Makers with Normal behavior.
     let makers_config_map = [
