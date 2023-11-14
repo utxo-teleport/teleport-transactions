@@ -13,6 +13,10 @@ use bitcoin::{
     Network, PublicKey, ScriptBuf,
 };
 
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{self, BufRead};
+
 use serde_json::Value;
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -187,6 +191,35 @@ pub fn to_hex(bytes: &Vec<u8>) -> String {
     }
 
     hex_string
+}
+
+pub fn parse_toml(file_path: &str) -> io::Result<HashMap<String, HashMap<String, String>>> {
+    let file = File::open(file_path)?;
+    let reader = io::BufReader::new(file);
+
+    let mut sections = HashMap::new();
+    let mut current_section = String::new();
+
+    for line in reader.lines() {
+        let line = line?;
+        if line.trim().starts_with('[') {
+            current_section = line
+                .trim()
+                .trim_matches(|p| p == '[' || p == ']')
+                .to_string();
+            sections.insert(current_section.clone(), HashMap::new());
+        } else if line.trim().starts_with('#') {
+            continue;
+        } else if let Some(pos) = line.find('=') {
+            let key = line[..pos].trim().to_string();
+            let value = line[pos + 1..].trim().to_string();
+            if let Some(section) = sections.get_mut(&current_section) {
+                section.insert(key, value);
+            }
+        }
+    }
+
+    Ok(sections)
 }
 
 #[cfg(test)]

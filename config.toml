@@ -1,0 +1,61 @@
+[taker_config]
+# relatively low value for now so that its easier to test without having to wait too much
+# right now only the very brave will try coinswap out on mainnet with non-trivial amounts
+
+#in blocks
+refund_locktime = 48 
+#in blocks
+refund_locktime_step = 48
+
+# first connect means the first time you're ever connecting, without having gotten any txes
+# confirmed yet, so the taker will not be very persistent since there should be plenty of other
+# makers out there
+# but also it should allow for flaky connections, otherwise you exclude raspberry pi nodes running
+# in people's closets, which are very important for decentralization
+
+first_connect_attempts = 5
+first_connect_sleep_delay_sec = 1
+first_connect_attempt_timeout_sec = 20
+
+# reconnect means when connecting to a maker again after having already gotten txes confirmed
+# as it would be a waste of miner fees to give up, the taker is coded to be very persistent
+# taker will first attempt to connect with a short delay between attempts
+# after that will attempt to connect with a longer delay between attempts
+# these figures imply that taker will attempt to connect for just over 48 hours
+# of course the user can ctrl+c before then if they give up themselves
+
+reconnect_attempts = 3200
+reconnect_short_sleep_delay = 10
+reconnect_long_sleep_delay = 60
+# after this many attempts, switch to sleeping longer
+short_long_sleep_delay_transition = 60 
+reconnect_attempt_timeout_sec = 300
+
+[maker_config]
+# Listening port  
+port = 8080 
+# Time interval between connection checks
+heart_beat_interval_secs = 3
+# Time interval to ping the RPC backend
+rpc_ping_interval_secs = 60
+# Time interval to ping the watchtower
+watchtower_ping_interval_secs = 300
+# Time interval to ping directory server
+# 12 hours = 60*60*12 = 43200
+directory_servers_refresh_interval_secs = 43200
+# Time interval to close a connection if no response is received
+idle_connection_timeout = 300
+# Onion address of the Maker
+onion_addrs = "example.onion"
+# Absolute coinswap fee
+absolute_fee_sats = 1000
+# Fee rate per swap amount in ppb.
+amount_relative_fee_ppb = 10000000
+# Fee rate for timelocked contract in ppb
+time_relative_fee_ppb = 100000
+# No of confirmation required for funding transaction
+required_confirms = 1
+# Minimum timelock difference between contract transaction of two hops
+min_contract_reaction_time = 48
+# Minimum coinswap amount size in sats
+min_size = 10000
