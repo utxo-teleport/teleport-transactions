@@ -31,6 +31,11 @@ use bitcoin::{
     BlockHash, OutPoint, PublicKey, ScriptBuf, Transaction, Txid,
 };
 
+use super::{
+    error::TakerError,
+    offers::{MakerAddress, OfferAndAddress},
+    routines::*,
+};
 use crate::{
     error::{NetError, ProtocolError},
     protocol::{
@@ -41,19 +46,13 @@ use crate::{
             TakerToMakerMessage,
         },
     },
-    taker::{config::TakerConfig, offers::OfferBook},
+    taker::{config::TakerConfig, offers::OfferBook, routines::NextPeerInfoArgs},
+    utill::*,
     wallet::{
         IncomingSwapCoin, OutgoingSwapCoin, RPCConfig, SwapCoin, Wallet, WalletSwapCoin,
         WatchOnlySwapCoin,
     },
 };
-
-use super::{
-    error::TakerError,
-    offers::{MakerAddress, OfferAndAddress},
-    routines::*,
-};
-use crate::utill::*;
 
 /// Swap specific parameters. These are user's policy and can differ among swaps.
 /// SwapParams govern the criteria to find suitable set of makers from the offerbook.
@@ -845,17 +844,20 @@ impl Taker {
 
             log::info!("Fundix Txids: {:?}", funding_txids);
 
+            // Struct for information related to the next peer
+            let next_maker_info = NextPeerInfoArgs {
+                next_peer_multisig_pubkeys: &next_peer_multisig_pubkeys,
+                next_peer_hashlock_pubkeys: &next_peer_hashlock_pubkeys,
+                next_maker_refund_locktime: maker_refund_locktime,
+                next_maker_fee_rate: self.ongoing_swap_state.swap_params.fee_rate,
+            };
+            // Make the function call with the updated arguments
             let (contract_sigs_as_recvr_sender, next_swap_contract_redeemscripts) =
                 send_proof_of_funding_and_init_next_hop(
                     &mut socket_reader,
                     &mut socket_writer,
-                    this_maker,
-                    funding_tx_infos,
-                    &next_peer_multisig_pubkeys,
-                    &next_peer_hashlock_pubkeys,
-                    maker_refund_locktime,
-                    self.ongoing_swap_state.swap_params.fee_rate,
-                    &this_maker_contract_txs,
+                    (&this_maker, &funding_tx_infos, &this_maker_contract_txs),
+                    next_maker_info,
                     self.get_preimage_hash(),
                 )
                 .await?;
