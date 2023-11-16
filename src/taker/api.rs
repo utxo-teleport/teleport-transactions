@@ -851,7 +851,6 @@ impl Taker {
                 next_maker_refund_locktime: maker_refund_locktime,
                 next_maker_fee_rate: self.ongoing_swap_state.swap_params.fee_rate,
             };
-            // Make the function call with the updated arguments
             let (contract_sigs_as_recvr_sender, next_swap_contract_redeemscripts) =
                 send_proof_of_funding_and_init_next_hop(
                     &mut socket_reader,
