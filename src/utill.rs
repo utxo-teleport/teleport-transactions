@@ -1,6 +1,6 @@
 //! Various Utility and Helper functions used in both Taker and Maker protocols.
 
-use std::sync::Once;
+use std::{path::PathBuf, sync::Once};
 
 use bitcoin::{
     address::{WitnessProgram, WitnessVersion},
@@ -193,7 +193,7 @@ pub fn to_hex(bytes: &Vec<u8>) -> String {
     hex_string
 }
 
-pub fn parse_toml(file_path: &str) -> io::Result<HashMap<String, HashMap<String, String>>> {
+pub fn parse_toml(file_path: &PathBuf) -> io::Result<HashMap<String, HashMap<String, String>>> {
     let file = File::open(file_path)?;
     let reader = io::BufReader::new(file);
 

@@ -112,7 +112,7 @@ impl Maker {
         wallet.sync()?;
         Ok(Self {
             behavior,
-            config: MakerConfig::init(port, onion_addrs),
+            config: MakerConfig::init(port, onion_addrs, None),
             wallet: RwLock::new(wallet),
             shutdown: RwLock::new(false),
             connection_state: Mutex::new(HashMap::new()),

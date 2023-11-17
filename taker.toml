@@ -4,6 +4,8 @@
 
 #in blocks
 refund_locktime = 48 
+#in blocks
+refund_locktime_step = 48
 
 # first connect means the first time you're ever connecting, without having gotten any txes
 # confirmed yet, so the taker will not be very persistent since there should be plenty of other
@@ -28,29 +30,3 @@ reconnect_long_sleep_delay = 60
 # after this many attempts, switch to sleeping longer
 short_long_sleep_delay_transition = 60 
 reconnect_attempt_timeout_sec = 300
-
-[maker_config]
-# Listening port  
-port = 8080 
-# Time interval between connection checks
-heart_beat_interval_secs = 3
-# Time interval to ping the RPC backend
-rpc_ping_interval_secs = 60
-# Time interval to ping the watchtower
-watchtower_ping_interval_secs = 300
-# Time interval to close a connection if no response is received
-idle_connection_timeout = 300
-# Onion address of the Maker
-onion_addrs = "example.onion"
-# Absolute coinswap fee
-absolute_fee_sats = 1000
-# Fee rate per swap amount in ppb.
-amount_relative_fee_ppb = 10000000
-# Fee rate for timelocked contract in ppb
-time_relative_fee_ppb = 100000
-# No of confirmation required for funding transaction
-required_confirms = 1
-# Minimum timelock difference between contract transaction of two hops
-min_contract_reaction_time = 48
-# Minimum coinswap amount size in sats
-min_size = 10000
