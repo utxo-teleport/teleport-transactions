@@ -193,6 +193,7 @@ pub fn to_hex(bytes: &Vec<u8>) -> String {
     hex_string
 }
 
+/// Function to parse toml file into key-value pair
 pub fn parse_toml(file_path: &PathBuf) -> io::Result<HashMap<String, HashMap<String, String>>> {
     let file = File::open(file_path)?;
     let reader = io::BufReader::new(file);
@@ -222,7 +223,7 @@ pub fn parse_toml(file_path: &PathBuf) -> io::Result<HashMap<String, HashMap<Str
     Ok(sections)
 }
 
-// Function to parse and log errors for each field
+/// Function to parse and log errors for each field
 pub fn parse_field<T: std::str::FromStr>(value: Option<&String>, default: T) -> io::Result<T> {
     match value {
         Some(value) => value

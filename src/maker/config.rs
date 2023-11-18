@@ -1,7 +1,4 @@
-use std::{
-    io::{self, ErrorKind},
-    path::PathBuf,
-};
+use std::{collections::HashMap, io, path::PathBuf};
 
 use crate::utill::{parse_field, parse_toml};
 
@@ -14,8 +11,6 @@ pub struct MakerConfig {
     pub heart_beat_interval_secs: u64,
     /// Time interval to ping the RPC backend
     pub rpc_ping_interval_secs: u64,
-    /// Time interval to ping the watchtower
-    pub watchtower_ping_interval_secs: u64,
     /// Time interval ping directory server
     pub directory_servers_refresh_interval_secs: u64,
     /// Time interval to close a connection if no response is received
@@ -42,7 +37,6 @@ impl Default for MakerConfig {
             port: 6102,
             heart_beat_interval_secs: 3,
             rpc_ping_interval_secs: 60,
-            watchtower_ping_interval_secs: 300,
             directory_servers_refresh_interval_secs: 60 * 60 * 12, //12 Hours
             idle_connection_timeout: 300,
             onion_addrs: "myhiddenserviceaddress.onion".to_string(),
@@ -60,27 +54,34 @@ impl MakerConfig {
     /// new a default configuration with given port and address
     pub fn new(file_path: Option<&PathBuf>) -> io::Result<Self> {
         let default_config = Self::default();
-        let default_path = PathBuf::from("maker.toml");
-        let path = file_path.unwrap_or(&default_path);
 
-        // Check if the file exists
-        if !path.exists() {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                format!("Config file not found: {:?}", path),
-            ));
-        }
+        let section = if let Some(path) = file_path {
+            if path.exists() {
+                parse_toml(path)?
+            } else {
+                log::warn!(
+                    "Maker config file not found at path : {}, using default config",
+                    path.display()
+                );
+                HashMap::new()
+            }
+        } else {
+            let default_path = PathBuf::from("maker.toml");
+            if default_path.exists() {
+                parse_toml(&default_path)?
+            } else {
+                log::warn!(
+                    "Maker config file not found in default path: {}, using default config",
+                    default_path.display()
+                );
+                HashMap::new()
+            }
+        };
 
-        // Attempt to parse the TOML file, propagate error on failure
-        let sections = parse_toml(path)?;
-
-        // Check if 'maker_config' section exists
-        let maker_config_section = sections.get("maker_config").ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("'maker_config' section not found in config file"),
-            )
-        })?;
+        let maker_config_section = section
+            .get("maker_config")
+            .cloned()
+            .unwrap_or_else(HashMap::new);
 
         Ok(MakerConfig {
             port: parse_field(maker_config_section.get("port"), default_config.port)
@@ -95,11 +96,6 @@ impl MakerConfig {
                 default_config.rpc_ping_interval_secs,
             )
             .unwrap_or(default_config.rpc_ping_interval_secs),
-            watchtower_ping_interval_secs: parse_field(
-                maker_config_section.get("watchtower_ping_interval_secs"),
-                default_config.watchtower_ping_interval_secs,
-            )
-            .unwrap_or(default_config.watchtower_ping_interval_secs),
             directory_servers_refresh_interval_secs: parse_field(
                 maker_config_section.get("directory_servers_refresh_interval_secs"),
                 default_config.directory_servers_refresh_interval_secs,
@@ -226,7 +222,7 @@ mod tests {
 
     #[test]
     fn test_missing_file() {
-        let config = MakerConfig::new(None).unwrap();
+        let config = MakerConfig::new(Some(&PathBuf::from("make.toml"))).unwrap();
         assert_eq!(config, MakerConfig::default());
     }
 }

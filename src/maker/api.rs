@@ -90,8 +90,7 @@ impl Maker {
     pub fn init(
         wallet_file: &PathBuf,
         rpc_config: &RPCConfig,
-        port: u16,
-        _onion_addrs: String,
+        port: Option<u16>,
         behavior: MakerBehavior,
     ) -> Result<Self, MakerError> {
         // Only allow MakerBehavior in functional tests
@@ -113,7 +112,7 @@ impl Maker {
         Ok(Self {
             behavior,
             config: MakerConfig {
-                port,
+                port: port.unwrap_or_default(),
                 ..MakerConfig::new(None).unwrap_or(MakerConfig::default())
             },
             wallet: RwLock::new(wallet),

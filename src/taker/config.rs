@@ -1,7 +1,4 @@
-use std::{
-    io::{self, ErrorKind},
-    path::PathBuf,
-};
+use std::{collections::HashMap, io, path::PathBuf};
 
 use crate::utill::{parse_field, parse_toml};
 /// Various global configurations defining the Taker behavior.
@@ -42,27 +39,34 @@ impl Default for TakerConfig {
 impl TakerConfig {
     pub fn new(file_path: Option<&PathBuf>) -> io::Result<Self> {
         let default_config = Self::default();
-        let default_path = PathBuf::from("taker.toml");
-        let path = file_path.unwrap_or(&default_path);
 
-        // Check if the file exists
-        if !path.exists() {
-            return Err(io::Error::new(
-                ErrorKind::InvalidData,
-                format!("Config file not found: {:?}", path),
-            ));
-        }
+        let section = if let Some(path) = file_path {
+            if path.exists() {
+                parse_toml(path)?
+            } else {
+                log::warn!(
+                    "Taker config file not found at path : {}, using default config",
+                    path.display()
+                );
+                HashMap::new()
+            }
+        } else {
+            let default_path = PathBuf::from("taker.toml");
+            if default_path.exists() {
+                parse_toml(&default_path)?
+            } else {
+                log::warn!(
+                    "Taker config file not found in default path: {}, using default config",
+                    default_path.display()
+                );
+                HashMap::new()
+            }
+        };
 
-        // Attempt to parse the TOML file, propagate error on failure
-        let sections = parse_toml(path)?;
-
-        // Check if 'taker_config' section exists
-        let taker_config_section = sections.get("taker_config").ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("'maker_config' section not found in config file"),
-            )
-        })?;
+        let taker_config_section = section
+            .get("taker_config")
+            .cloned()
+            .unwrap_or_else(HashMap::new);
 
         Ok(Self {
             refund_locktime: parse_field(
@@ -208,7 +212,7 @@ mod tests {
 
     #[test]
     fn test_missing_file() {
-        let config = TakerConfig::new(None).unwrap();
+        let config = TakerConfig::new(Some(&PathBuf::from("take.toml"))).unwrap();
         assert_eq!(config, TakerConfig::default());
     }
 }
