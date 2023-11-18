@@ -1,4 +1,7 @@
-use std::path::PathBuf;
+use std::{
+    io::{self, ErrorKind},
+    path::PathBuf,
+};
 
 use crate::utill::{parse_field, parse_toml};
 /// Various global configurations defining the Taker behavior.
@@ -37,86 +40,82 @@ impl Default for TakerConfig {
 }
 
 impl TakerConfig {
-    pub fn new(file_path: Option<&PathBuf>) -> Self {
+    pub fn new(file_path: Option<&PathBuf>) -> io::Result<Self> {
         let default_config = Self::default();
         let default_path = PathBuf::from("taker.toml");
         let path = file_path.unwrap_or(&default_path);
 
         // Check if the file exists
         if !path.exists() {
-            eprintln!("Config file not found: {:?}", path);
-            return default_config;
+            return Err(io::Error::new(
+                ErrorKind::InvalidData,
+                format!("Config file not found: {:?}", path),
+            ));
         }
 
-        // Attempt to parse the TOML file
-        let sections = match parse_toml(path) {
-            Ok(sections) => sections,
-            Err(err) => {
-                eprintln!("Error parsing config file: {:?}", err);
-                return default_config;
-            }
-        };
+        // Attempt to parse the TOML file, propagate error on failure
+        let sections = parse_toml(path)?;
 
-        let taker_config_section = match sections.get("taker_config") {
-            Some(config) => config,
-            None => {
-                eprintln!("'taker_config' section not found in config file");
-                return default_config;
-            }
-        };
+        // Check if 'taker_config' section exists
+        let taker_config_section = sections.get("taker_config").ok_or_else(|| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("'maker_config' section not found in config file"),
+            )
+        })?;
 
-        Self {
+        Ok(Self {
             refund_locktime: parse_field(
-                "refund_locktime",
                 taker_config_section.get("refund_locktime"),
                 default_config.refund_locktime,
-            ),
+            )
+            .unwrap_or(default_config.refund_locktime),
             refund_locktime_step: parse_field(
-                "refund_locktime_step",
                 taker_config_section.get("refund_locktime_step"),
                 default_config.refund_locktime_step,
-            ),
+            )
+            .unwrap_or(default_config.refund_locktime_step),
             first_connect_attempts: parse_field(
-                "first_connect_attempts",
                 taker_config_section.get("first_connect_attempts"),
                 default_config.first_connect_attempts,
-            ),
+            )
+            .unwrap_or(default_config.first_connect_attempts),
             first_connect_sleep_delay_sec: parse_field(
-                "first_connect_sleep_delay_sec",
                 taker_config_section.get("first_connect_sleep_delay_sec"),
                 default_config.first_connect_sleep_delay_sec,
-            ),
+            )
+            .unwrap_or(default_config.first_connect_sleep_delay_sec),
             first_connect_attempt_timeout_sec: parse_field(
-                "first_connect_attempt_timeout_sec",
                 taker_config_section.get("first_connect_attempt_timeout_sec"),
                 default_config.first_connect_attempt_timeout_sec,
-            ),
+            )
+            .unwrap_or(default_config.first_connect_attempt_timeout_sec),
             reconnect_attempts: parse_field(
-                "reconnect_attempts",
                 taker_config_section.get("reconnect_attempts"),
                 default_config.reconnect_attempts,
-            ),
+            )
+            .unwrap_or(default_config.reconnect_attempts),
             reconnect_short_sleep_delay: parse_field(
-                "reconnect_short_sleep_delay",
                 taker_config_section.get("reconnect_short_sleep_delay"),
                 default_config.reconnect_short_sleep_delay,
-            ),
+            )
+            .unwrap_or(default_config.reconnect_short_sleep_delay),
             reconnect_long_sleep_delay: parse_field(
-                "reconnect_long_sleep_delay",
                 taker_config_section.get("reconnect_long_sleep_delay"),
                 default_config.reconnect_long_sleep_delay,
-            ),
+            )
+            .unwrap_or(default_config.reconnect_long_sleep_delay),
             short_long_sleep_delay_transition: parse_field(
-                "short_long_sleep_delay_transition",
                 taker_config_section.get("short_long_sleep_delay_transition"),
                 default_config.short_long_sleep_delay_transition,
-            ),
+            )
+            .unwrap_or(default_config.short_long_sleep_delay_transition),
             reconnect_attempt_timeout_sec: parse_field(
-                "reconnect_attempt_timeout_sec",
                 taker_config_section.get("reconnect_attempt_timeout_sec"),
                 default_config.reconnect_attempt_timeout_sec,
-            ),
-        }
+            )
+            .unwrap_or(default_config.reconnect_attempt_timeout_sec),
+        })
     }
 }
 
@@ -154,7 +153,7 @@ mod tests {
         reconnect_attempt_timeout_sec = 300
         "#;
         let config_path = create_temp_config(contents, "valid_taker_config.toml");
-        let config = TakerConfig::new(Some(&config_path));
+        let config = TakerConfig::new(Some(&config_path)).unwrap();
         remove_temp_config(&config_path);
 
         let default_config = TakerConfig::default();
@@ -168,7 +167,7 @@ mod tests {
             refund_locktime = 48
         "#;
         let config_path = create_temp_config(contents, "missing_fields_taker_config.toml");
-        let config = TakerConfig::new(Some(&config_path));
+        let config = TakerConfig::new(Some(&config_path)).unwrap();
         remove_temp_config(&config_path);
 
         assert_eq!(config.refund_locktime, 48);
@@ -182,7 +181,7 @@ mod tests {
             refund_locktime = "not_a_number"
         "#;
         let config_path = create_temp_config(contents, "incorrect_type_taker_config.toml");
-        let config = TakerConfig::new(Some(&config_path));
+        let config = TakerConfig::new(Some(&config_path)).unwrap();
         remove_temp_config(&config_path);
 
         assert_eq!(config, TakerConfig::default());
@@ -195,7 +194,7 @@ mod tests {
             refund_locktime = 49
         "#;
         let config_path = create_temp_config(contents, "different_data_taker_config.toml");
-        let config = TakerConfig::new(Some(&config_path));
+        let config = TakerConfig::new(Some(&config_path)).unwrap();
         remove_temp_config(&config_path);
         assert_eq!(config.refund_locktime, 49);
         assert_eq!(
@@ -205,5 +204,11 @@ mod tests {
             },
             TakerConfig::default()
         )
+    }
+
+    #[test]
+    fn test_missing_file() {
+        let config = TakerConfig::new(None).unwrap();
+        assert_eq!(config, TakerConfig::default());
     }
 }

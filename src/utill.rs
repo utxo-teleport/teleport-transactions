@@ -1,6 +1,6 @@
 //! Various Utility and Helper functions used in both Taker and Maker protocols.
 
-use std::{path::PathBuf, sync::Once};
+use std::{io::ErrorKind, path::PathBuf, sync::Once};
 
 use bitcoin::{
     address::{WitnessProgram, WitnessVersion},
@@ -223,26 +223,12 @@ pub fn parse_toml(file_path: &PathBuf) -> io::Result<HashMap<String, HashMap<Str
 }
 
 // Function to parse and log errors for each field
-pub fn parse_field<T: std::str::FromStr>(
-    field_name: &str,
-    value: Option<&String>,
-    default: T,
-) -> T {
+pub fn parse_field<T: std::str::FromStr>(value: Option<&String>, default: T) -> io::Result<T> {
     match value {
-        Some(value) => match value.parse() {
-            Ok(parsed) => parsed,
-            Err(_) => {
-                eprintln!(
-                    "Invalid value or type for {}: '{}', using default.",
-                    field_name, value
-                );
-                default
-            }
-        },
-        None => {
-            eprintln!("Missing value for {}, using default.", field_name);
-            default
-        }
+        Some(value) => value
+            .parse()
+            .map_err(|_e| io::Error::new(ErrorKind::InvalidData, format!("parsing failed"))),
+        None => Ok(default),
     }
 }
 
