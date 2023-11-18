@@ -222,6 +222,30 @@ pub fn parse_toml(file_path: &PathBuf) -> io::Result<HashMap<String, HashMap<Str
     Ok(sections)
 }
 
+// Function to parse and log errors for each field
+pub fn parse_field<T: std::str::FromStr>(
+    field_name: &str,
+    value: Option<&String>,
+    default: T,
+) -> T {
+    match value {
+        Some(value) => match value.parse() {
+            Ok(parsed) => parsed,
+            Err(_) => {
+                eprintln!(
+                    "Invalid value or type for {}: '{}', using default.",
+                    field_name, value
+                );
+                default
+            }
+        },
+        None => {
+            eprintln!("Missing value for {}, using default.", field_name);
+            default
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use crate::utill::parse_toml;
+use crate::utill::{parse_field, parse_toml};
 
 /// Maker Configuration, controlling various maker behavior.
 #[derive(Debug, Clone, PartialEq)]
@@ -36,13 +36,13 @@ pub struct MakerConfig {
 impl Default for MakerConfig {
     fn default() -> Self {
         Self {
-            port: 3000,
+            port: 6102,
             heart_beat_interval_secs: 3,
             rpc_ping_interval_secs: 60,
             watchtower_ping_interval_secs: 300,
             directory_servers_refresh_interval_secs: 60 * 60 * 12, //12 Hours
             idle_connection_timeout: 300,
-            onion_addrs: "onion@example".to_string(),
+            onion_addrs: "myhiddenserviceaddress.onion:6102".to_string(),
             absolute_fee_sats: 1000,
             amount_relative_fee_ppb: 10_000_000,
             time_relative_fee_ppb: 100_000,
@@ -55,229 +55,176 @@ impl Default for MakerConfig {
 
 impl MakerConfig {
     /// Init a default configuration with given port and address
-    pub fn init(port: u16, onion_addrs: String, file_path: Option<&PathBuf>) -> Self {
-        let sections = if let Some(path) = file_path {
-            parse_toml(path)
-        } else {
-            parse_toml(&PathBuf::from("maker.toml"))
+    pub fn init(file_path: Option<&PathBuf>) -> Self {
+        let default_config = Self::default();
+        let default_path = PathBuf::from("maker.toml");
+        let path = file_path.unwrap_or(&default_path);
+
+        // Check if the file exists
+        if !path.exists() {
+            eprintln!("Config file not found: {:?}", path);
+            return default_config;
+        }
+
+        // Attempt to parse the TOML file
+        let sections = match parse_toml(path) {
+            Ok(sections) => sections,
+            Err(err) => {
+                eprintln!("Error parsing config file: {:?}", err);
+                return default_config;
+            }
         };
 
-        if sections.is_err() {
-            return Self {
-                port,
-                onion_addrs,
-                ..MakerConfig::default()
-            };
-        }
-        let section = sections.unwrap();
-
-        if let None = section.get("maker.toml") {
-            return Self {
-                port,
-                onion_addrs,
-                ..MakerConfig::default()
-            };
-        }
-
-        let maker_config_section = section.get("maker_config").unwrap();
-
-        let maker_keys = vec![
-            "absolute_fee_sats",
-            "amount_relative_fee_ppb",
-            "time_relative_fee_ppb",
-            "required_confirms",
-            "min_contract_reaction_time",
-            "min_size",
-            "idle_connection_timeout",
-            "watchtower_ping_interval_secs",
-            "heart_beat_interval_secs",
-            "heart_beat_interval_secs",
-            "rpc_ping_interval_secs",
-            "directory_servers_refresh_interval_secs",
-        ];
-
-        for x in maker_keys.iter() {
-            if maker_config_section.contains_key(*x) == false {
-                return Self {
-                    port,
-                    onion_addrs,
-                    ..MakerConfig::default()
-                };
+        let maker_config_section = match sections.get("maker_config") {
+            Some(config) => config,
+            None => {
+                eprintln!("'maker_config' section not found in config file");
+                return default_config;
             }
-        }
+        };
+
         MakerConfig {
-            port,
-            absolute_fee_sats: maker_config_section
-                .get("absolute_fee_sats")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            amount_relative_fee_ppb: maker_config_section
-                .get("amount_relative_fee_ppb")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            time_relative_fee_ppb: maker_config_section
-                .get("time_relative_fee_ppb")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            required_confirms: maker_config_section
-                .get("required_confirms")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            min_contract_reaction_time: maker_config_section
-                .get("min_contract_reaction_time")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            min_size: maker_config_section
-                .get("min_size")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            idle_connection_timeout: maker_config_section
-                .get("idle_connection_timeout")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            watchtower_ping_interval_secs: maker_config_section
-                .get("watchtower_ping_interval_secs")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            heart_beat_interval_secs: maker_config_section
-                .get("heart_beat_interval_secs")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            onion_addrs,
-            rpc_ping_interval_secs: maker_config_section
-                .get("rpc_ping_interval_secs")
-                .unwrap()
-                .parse()
-                .unwrap(),
-            directory_servers_refresh_interval_secs: maker_config_section
-                .get("directory_servers_refresh_interval_secs")
-                .unwrap()
-                .parse()
-                .unwrap(),
+            port: parse_field(
+                "port",
+                maker_config_section.get("port"),
+                default_config.port,
+            ),
+            heart_beat_interval_secs: parse_field(
+                "heart_beat_interval_secs",
+                maker_config_section.get("heart_beat_interval_secs"),
+                default_config.heart_beat_interval_secs,
+            ),
+            rpc_ping_interval_secs: parse_field(
+                "rpc_ping_interval_secs",
+                maker_config_section.get("rpc_ping_interval_secs"),
+                default_config.rpc_ping_interval_secs,
+            ),
+            watchtower_ping_interval_secs: parse_field(
+                "watchtower_ping_interval_secs",
+                maker_config_section.get("watchtower_ping_interval_secs"),
+                default_config.watchtower_ping_interval_secs,
+            ),
+            directory_servers_refresh_interval_secs: parse_field(
+                "directory_servers_refresh_interval_secs",
+                maker_config_section.get("directory_servers_refresh_interval_secs"),
+                default_config.directory_servers_refresh_interval_secs,
+            ),
+            idle_connection_timeout: parse_field(
+                "idle_connection_timeout",
+                maker_config_section.get("idle_connection_timeout"),
+                default_config.idle_connection_timeout,
+            ),
+            onion_addrs: maker_config_section
+                .get("onion_addrs")
+                .map(|s| s.to_string())
+                .unwrap_or(default_config.onion_addrs),
+            absolute_fee_sats: parse_field(
+                "absolute_fee_sats",
+                maker_config_section.get("absolute_fee_sats"),
+                default_config.absolute_fee_sats,
+            ),
+            amount_relative_fee_ppb: parse_field(
+                "amount_relative_fee_ppb",
+                maker_config_section.get("amount_relative_fee_ppb"),
+                default_config.amount_relative_fee_ppb,
+            ),
+            time_relative_fee_ppb: parse_field(
+                "time_relative_fee_ppb",
+                maker_config_section.get("time_relative_fee_ppb"),
+                default_config.time_relative_fee_ppb,
+            ),
+            required_confirms: parse_field(
+                "required_confirms",
+                maker_config_section.get("required_confirms"),
+                default_config.required_confirms,
+            ),
+            min_contract_reaction_time: parse_field(
+                "min_contract_reaction_time",
+                maker_config_section.get("min_contract_reaction_time"),
+                default_config.min_contract_reaction_time,
+            ),
+            min_size: parse_field(
+                "min_size",
+                maker_config_section.get("min_size"),
+                default_config.min_size,
+            ),
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use std::fs::{self, File};
+    use std::io::Write;
     use std::path::PathBuf;
 
-    use super::MakerConfig;
+    fn create_temp_config(contents: &str, file_name: &str) -> PathBuf {
+        let file_path = PathBuf::from(file_name);
+        let mut file = File::create(&file_path).unwrap();
+        writeln!(file, "{}", contents).unwrap();
+        file_path
+    }
 
-    #[test]
-    fn test_parsing_toml_maker_all_works() {
-        let dummy_maker = MakerConfig {
-            port: 3000,
-            heart_beat_interval_secs: 3,
-            rpc_ping_interval_secs: 60,
-            watchtower_ping_interval_secs: 300,
-            directory_servers_refresh_interval_secs: 60 * 60 * 12, //12 Hours
-            idle_connection_timeout: 300,
-            onion_addrs: "example.onion".to_string(),
-            absolute_fee_sats: 1000,
-            amount_relative_fee_ppb: 10_000_000,
-            time_relative_fee_ppb: 100_000,
-            required_confirms: 1,
-            min_contract_reaction_time: 48,
-            min_size: 10_000,
-        };
-
-        let parsed_maker = MakerConfig::init(
-            3000,
-            "example.onion".to_string(),
-            Some(&PathBuf::from("maker.toml")),
-        );
-        // Everything works fine
-        assert_eq!(dummy_maker, parsed_maker);
+    fn remove_temp_config(path: &PathBuf) {
+        fs::remove_file(path).unwrap();
     }
 
     #[test]
-    fn test_parsing_toml_maker_file_missing() {
-        let dummy_maker = MakerConfig {
-            port: 3000,
-            heart_beat_interval_secs: 3,
-            rpc_ping_interval_secs: 60,
-            watchtower_ping_interval_secs: 300,
-            directory_servers_refresh_interval_secs: 60 * 60 * 12, //12 Hours
-            idle_connection_timeout: 300,
-            onion_addrs: "example.onion".to_string(),
-            absolute_fee_sats: 1000,
-            amount_relative_fee_ppb: 10_000_000,
-            time_relative_fee_ppb: 100_000,
-            required_confirms: 1,
-            min_contract_reaction_time: 48,
-            min_size: 10_000,
-        };
+    fn test_valid_config() {
+        let contents = r#"
+            [maker_config]
+            port = 6102
+            heart_beat_interval_secs = 3
+            rpc_ping_interval_secs = 60
+            watchtower_ping_interval_secs = 300
+            directory_servers_refresh_interval_secs = 43200
+            idle_connection_timeout = 300
+            absolute_fee_sats = 1000
+            amount_relative_fee_ppb = 10000000
+            time_relative_fee_ppb = 100000
+            required_confirms = 1
+            min_contract_reaction_time = 48
+            min_size = 10000
+        "#;
+        let config_path = create_temp_config(contents, "valid_maker_config.toml");
+        let config = MakerConfig::init(Some(&config_path));
+        remove_temp_config(&config_path);
 
-        let parsed_maker = MakerConfig::init(
-            3000,
-            "example.onion".to_string(),
-            Some(&PathBuf::from("make.toml")),
-        );
-        // Taking the default path, when the file is not present
-        assert_eq!(dummy_maker, parsed_maker);
+        let default_config = MakerConfig::default();
+        assert_eq!(config, default_config);
     }
 
     #[test]
-    fn test_parsing_toml_maker_wrong_file() {
-        let dummy_maker = MakerConfig {
-            port: 3000,
-            heart_beat_interval_secs: 3,
-            rpc_ping_interval_secs: 60,
-            watchtower_ping_interval_secs: 300,
-            directory_servers_refresh_interval_secs: 60 * 60 * 12, //12 Hours
-            idle_connection_timeout: 300,
-            onion_addrs: "example.onion".to_string(),
-            absolute_fee_sats: 1000,
-            amount_relative_fee_ppb: 10_000_000,
-            time_relative_fee_ppb: 100_000,
-            required_confirms: 1,
-            min_contract_reaction_time: 48,
-            min_size: 10_000,
-        };
+    fn test_missing_fields() {
+        let contents = r#"
+            [maker_config]
+            port = 6103
+        "#;
+        let config_path = create_temp_config(contents, "missing_fields_maker_config.toml");
+        let config = MakerConfig::init(Some(&config_path));
+        remove_temp_config(&config_path);
 
-        let parsed_maker = MakerConfig::init(
-            3000,
-            "example.onion".to_string(),
-            Some(&PathBuf::from("config.toml")),
+        assert_eq!(config.port, 6103);
+        assert_eq!(
+            MakerConfig {
+                port: 6102,
+                ..config
+            },
+            MakerConfig::default()
         );
-        // Taking the default path, when the file is not present
-        assert_eq!(dummy_maker, parsed_maker);
     }
 
     #[test]
-    fn test_parsing_toml_maker_faulty_data() {
-        let dummy_maker = MakerConfig {
-            port: 3000,
-            heart_beat_interval_secs: 3,
-            rpc_ping_interval_secs: 60,
-            watchtower_ping_interval_secs: 300,
-            directory_servers_refresh_interval_secs: 60 * 60 * 12, //12 Hours
-            idle_connection_timeout: 300,
-            onion_addrs: "example.onion".to_string(),
-            absolute_fee_sats: 1000,
-            amount_relative_fee_ppb: 10_000_000,
-            time_relative_fee_ppb: 100_000,
-            required_confirms: 1,
-            min_contract_reaction_time: 48,
-            min_size: 10_000,
-        };
+    fn test_incorrect_data_type() {
+        let contents = r#"
+            [maker_config]
+            port = "not_a_number"
+        "#;
+        let config_path = create_temp_config(contents, "incorrect_type_maker_config.toml");
+        let config = MakerConfig::init(Some(&config_path));
+        remove_temp_config(&config_path);
 
-        let parsed_maker = MakerConfig::init(
-            3000,
-            "example.onion".to_string(),
-            Some(&PathBuf::from("config.toml")),
-        );
-        // Taking the default path, when the file is not present
-        assert_eq!(dummy_maker, parsed_maker);
+        assert_eq!(config.port, MakerConfig::default().port);
     }
 }

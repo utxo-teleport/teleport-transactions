@@ -1,6 +1,6 @@
 [maker_config]
 # Listening port  
-port = 8080 
+port = 6102 
 # Time interval between connection checks
 heart_beat_interval_secs = 3
 # Time interval to ping the RPC backend
@@ -12,8 +12,6 @@ watchtower_ping_interval_secs = 300
 directory_servers_refresh_interval_secs = 43200
 # Time interval to close a connection if no response is received
 idle_connection_timeout = 300
-# Onion address of the Maker
-onion_addrs = "example.onion"
 # Absolute coinswap fee
 absolute_fee_sats = 1000
 # Fee rate per swap amount in ppb.
