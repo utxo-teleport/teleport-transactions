@@ -229,16 +229,18 @@ pub(crate) async fn req_sigs_for_recvr_once<S: SwapCoin>(
 
 // Type for information related to `this maker` consisting of:
 // `this_maker`, `funding_txs_infos`, `this_maker_contract_txs`
-pub type ThisMakerInfo<'a> = (
-    &'a OfferAndAddress,
-    &'a Vec<FundingTxInfo>,
-    &'a Vec<Transaction>,
-);
+#[derive(Clone)]
+pub struct ThisMakerInfo {
+    pub this_maker: OfferAndAddress,
+    pub funding_tx_infos: Vec<FundingTxInfo>,
+    pub this_maker_contract_txs: Vec<Transaction>,
+}
 
-// Struct for information related to the next peer
-pub struct NextPeerInfoArgs<'a> {
-    pub next_peer_multisig_pubkeys: &'a [PublicKey],
-    pub next_peer_hashlock_pubkeys: &'a [PublicKey],
+// Type for information related to the next peer
+#[derive(Clone)]
+pub struct NextPeerInfoArgs {
+    pub next_peer_multisig_pubkeys: Vec<PublicKey>,
+    pub next_peer_hashlock_pubkeys: Vec<PublicKey>,
     pub next_maker_refund_locktime: u16,
     pub next_maker_fee_rate: u64,
 }
@@ -247,8 +249,8 @@ pub struct NextPeerInfoArgs<'a> {
 pub(crate) async fn send_proof_of_funding_and_init_next_hop(
     socket_reader: &mut BufReader<ReadHalf<'_>>,
     socket_writer: &mut WriteHalf<'_>,
-    this_maker_info: ThisMakerInfo<'_>,
-    next_peer_info: NextPeerInfoArgs<'_>,
+    this_maker_info: ThisMakerInfo,
+    next_peer_info: NextPeerInfoArgs,
     hashvalue: Hash160,
 ) -> Result<(ContractSigsAsRecvrAndSender, Vec<ScriptBuf>), TakerError> {
     let NextPeerInfoArgs {
@@ -257,10 +259,16 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
         next_maker_refund_locktime,
         next_maker_fee_rate,
     } = next_peer_info;
+    let ThisMakerInfo {
+        this_maker: _,
+        funding_tx_infos: _,
+        this_maker_contract_txs: _,
+    } = this_maker_info;
+
     send_message(
         socket_writer,
         &TakerToMakerMessage::RespProofOfFunding(ProofOfFunding {
-            confirmed_funding_txes: this_maker_info.1.clone(),
+            confirmed_funding_txes: this_maker_info.funding_tx_infos.clone(),
             next_coinswap_info: next_peer_multisig_pubkeys
                 .iter()
                 .zip(next_peer_hashlock_pubkeys.iter())
@@ -278,9 +286,9 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
     .await?;
     let contract_sigs_as_recvr_and_sender = match read_message(socket_reader).await {
         Ok(MakerToTakerMessage::ReqContractSigsAsRecvrAndSender(m)) => {
-            if m.receivers_contract_txs.len() != this_maker_info.1.len() {
+            if m.receivers_contract_txs.len() != this_maker_info.funding_tx_infos.len() {
                 return Err(ProtocolError::WrongNumOfContractTxs {
-                    expected: this_maker_info.1.len(),
+                    expected: this_maker_info.funding_tx_infos.len(),
                     received: m.receivers_contract_txs.len(),
                 }
                 .into());
@@ -305,7 +313,7 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
     };
 
     let funding_tx_values = this_maker_info
-        .1
+        .funding_tx_infos
         .iter()
         .map(|funding_info| {
             let funding_output_index =
@@ -327,9 +335,9 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
         .map(|i| i.funding_amount)
         .sum::<u64>();
     let coinswap_fees = calculate_coinswap_fee(
-        this_maker_info.0.offer.absolute_fee_sat,
-        this_maker_info.0.offer.amount_relative_fee_ppb,
-        this_maker_info.0.offer.time_relative_fee_ppb,
+        this_maker_info.this_maker.offer.absolute_fee_sat,
+        this_maker_info.this_maker.offer.amount_relative_fee_ppb,
+        this_maker_info.this_maker.offer.time_relative_fee_ppb,
         this_amount,
         1, //time_in_blocks just 1 for now
     );
@@ -356,8 +364,13 @@ pub(crate) async fn send_proof_of_funding_and_init_next_hop(
         contract_sigs_as_recvr_and_sender
             .receivers_contract_txs
             .iter()
-            .zip(this_maker_info.2.iter())
-            .zip(this_maker_info.1.iter().map(|fi| &fi.contract_redeemscript))
+            .zip(this_maker_info.this_maker_contract_txs.iter())
+            .zip(
+                this_maker_info
+                    .funding_tx_infos
+                    .iter()
+                    .map(|fi| &fi.contract_redeemscript),
+            )
     {
         validate_contract_tx(
             receivers_contract_tx,

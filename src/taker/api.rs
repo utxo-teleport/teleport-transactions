@@ -681,7 +681,7 @@ impl Taker {
     async fn send_sigs_init_next_hop(
         &mut self,
         maker_refund_locktime: u16,
-        funding_tx_infos: &Vec<FundingTxInfo>,
+        funding_tx_infos: &[FundingTxInfo],
     ) -> Result<(NextPeerInfo, ContractSigsAsRecvrAndSender), TakerError> {
         let reconnect_timeout_sec = self.config.reconnect_attempt_timeout_sec;
         // Configurable reconnection attempts for testing
@@ -762,7 +762,7 @@ impl Taker {
     async fn send_sigs_init_next_hop_once(
         &mut self,
         maker_refund_locktime: u16,
-        funding_tx_infos: &Vec<FundingTxInfo>,
+        funding_tx_infos: &[FundingTxInfo],
     ) -> Result<(NextPeerInfo, ContractSigsAsRecvrAndSender), TakerError> {
         let this_maker = &self
             .ongoing_swap_state
@@ -846,8 +846,8 @@ impl Taker {
 
             // Struct for information related to the next peer
             let next_maker_info = NextPeerInfoArgs {
-                next_peer_multisig_pubkeys: &next_peer_multisig_pubkeys,
-                next_peer_hashlock_pubkeys: &next_peer_hashlock_pubkeys,
+                next_peer_multisig_pubkeys: next_peer_multisig_pubkeys.clone(),
+                next_peer_hashlock_pubkeys: next_peer_hashlock_pubkeys.clone(),
                 next_maker_refund_locktime: maker_refund_locktime,
                 next_maker_fee_rate: self.ongoing_swap_state.swap_params.fee_rate,
             };
@@ -855,7 +855,11 @@ impl Taker {
                 send_proof_of_funding_and_init_next_hop(
                     &mut socket_reader,
                     &mut socket_writer,
-                    (&this_maker, &funding_tx_infos, &this_maker_contract_txs),
+                    ThisMakerInfo {
+                        this_maker: this_maker.clone(), // Assuming OfferAndAddress is Clone
+                        funding_tx_infos: funding_tx_infos.to_vec(),
+                        this_maker_contract_txs: this_maker_contract_txs.clone(),
+                    },
                     next_maker_info,
                     self.get_preimage_hash(),
                 )
