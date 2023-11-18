@@ -54,8 +54,15 @@ impl Default for MakerConfig {
 }
 
 impl MakerConfig {
-    /// Init a default configuration with given port and address
-    pub fn init(file_path: Option<&PathBuf>) -> Self {
+    /// new a default configuration with given port and address
+    pub fn init(port: u16, onion_addrs: String) -> Self {
+        Self {
+            port,
+            onion_addrs,
+            ..MakerConfig::default()
+        }
+    }
+    pub fn new(file_path: Option<&PathBuf>) -> Self {
         let default_config = Self::default();
         let default_path = PathBuf::from("maker.toml");
         let path = file_path.unwrap_or(&default_path);
@@ -188,7 +195,7 @@ mod tests {
             min_size = 10000
         "#;
         let config_path = create_temp_config(contents, "valid_maker_config.toml");
-        let config = MakerConfig::init(Some(&config_path));
+        let config = MakerConfig::new(Some(&config_path));
         remove_temp_config(&config_path);
 
         let default_config = MakerConfig::default();
@@ -202,7 +209,7 @@ mod tests {
             port = 6103
         "#;
         let config_path = create_temp_config(contents, "missing_fields_maker_config.toml");
-        let config = MakerConfig::init(Some(&config_path));
+        let config = MakerConfig::new(Some(&config_path));
         remove_temp_config(&config_path);
 
         assert_eq!(config.port, 6103);
@@ -222,7 +229,7 @@ mod tests {
             port = "not_a_number"
         "#;
         let config_path = create_temp_config(contents, "incorrect_type_maker_config.toml");
-        let config = MakerConfig::init(Some(&config_path));
+        let config = MakerConfig::new(Some(&config_path));
         remove_temp_config(&config_path);
 
         assert_eq!(config.port, MakerConfig::default().port);

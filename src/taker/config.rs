@@ -37,7 +37,7 @@ impl Default for TakerConfig {
 }
 
 impl TakerConfig {
-    pub fn init(file_path: Option<&PathBuf>) -> Self {
+    pub fn new(file_path: Option<&PathBuf>) -> Self {
         let default_config = Self::default();
         let default_path = PathBuf::from("taker.toml");
         let path = file_path.unwrap_or(&default_path);
@@ -154,7 +154,7 @@ mod tests {
         reconnect_attempt_timeout_sec = 300
         "#;
         let config_path = create_temp_config(contents, "valid_taker_config.toml");
-        let config = TakerConfig::init(Some(&config_path));
+        let config = TakerConfig::new(Some(&config_path));
         remove_temp_config(&config_path);
 
         let default_config = TakerConfig::default();
@@ -168,7 +168,7 @@ mod tests {
             refund_locktime = 48
         "#;
         let config_path = create_temp_config(contents, "missing_fields_taker_config.toml");
-        let config = TakerConfig::init(Some(&config_path));
+        let config = TakerConfig::new(Some(&config_path));
         remove_temp_config(&config_path);
 
         assert_eq!(config.refund_locktime, 48);
@@ -182,7 +182,7 @@ mod tests {
             refund_locktime = "not_a_number"
         "#;
         let config_path = create_temp_config(contents, "incorrect_type_taker_config.toml");
-        let config = TakerConfig::init(Some(&config_path));
+        let config = TakerConfig::new(Some(&config_path));
         remove_temp_config(&config_path);
 
         assert_eq!(config, TakerConfig::default());
@@ -195,7 +195,7 @@ mod tests {
             refund_locktime = 49
         "#;
         let config_path = create_temp_config(contents, "different_data_taker_config.toml");
-        let config = TakerConfig::init(Some(&config_path));
+        let config = TakerConfig::new(Some(&config_path));
         remove_temp_config(&config_path);
         assert_eq!(config.refund_locktime, 49);
         assert_eq!(
