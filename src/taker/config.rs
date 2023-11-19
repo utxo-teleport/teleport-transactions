@@ -126,9 +126,11 @@ impl TakerConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::{self, File};
-    use std::io::Write;
-    use std::path::PathBuf;
+    use std::{
+        fs::{self, File},
+        io::Write,
+        path::PathBuf,
+    };
 
     fn create_temp_config(contents: &str, file_name: &str) -> PathBuf {
         let file_path = PathBuf::from(file_name);

@@ -113,7 +113,7 @@ impl Maker {
             behavior,
             config: MakerConfig {
                 port: port.unwrap_or_default(),
-                ..MakerConfig::new(None).unwrap_or(MakerConfig::default())
+                ..MakerConfig::new(None)?
             },
             wallet: RwLock::new(wallet),
             shutdown: RwLock::new(false),

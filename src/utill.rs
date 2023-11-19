@@ -13,9 +13,11 @@ use bitcoin::{
     Network, PublicKey, ScriptBuf,
 };
 
-use std::collections::HashMap;
-use std::fs::File;
-use std::io::{self, BufRead};
+use std::{
+    collections::HashMap,
+    fs::File,
+    io::{self, BufRead},
+};
 
 use serde_json::Value;
 use tokio::{
