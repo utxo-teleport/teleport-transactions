@@ -136,12 +136,8 @@ pub enum UTXOSpendInfo {
     },
 }
 
-type IncomingCoinsPair<'a> = (
-    Vec<(ListUnspentResultEntry, &'a IncomingSwapCoin)>,
-    Vec<(ListUnspentResultEntry, &'a OutgoingSwapCoin)>,
-);
-
-type OutgoingCoinsPair<'a> = (
+// Custom type to handle complex return values.
+type SwapCoinsInfo<'a> = (
     Vec<(&'a IncomingSwapCoin, ListUnspentResultEntry)>,
     Vec<(&'a OutgoingSwapCoin, ListUnspentResultEntry)>,
 );
@@ -837,7 +833,7 @@ impl Wallet {
 
     pub fn find_incomplete_coinswaps(
         &self,
-    ) -> Result<HashMap<Hash160, IncomingCoinsPair>, WalletError> {
+    ) -> Result<HashMap<Hash160, SwapCoinsInfo>, WalletError> {
         self.rpc
             .call::<Value>("lockunspent", &[Value::Bool(true)])?;
 
@@ -849,7 +845,7 @@ impl Wallet {
             .map(|sc| sc.get_hashvalue())
             .collect::<HashSet<Hash160>>();
 
-        let mut incomplete_swapcoin_groups = HashMap::<Hash160, IncomingCoinsPair>::new();
+        let mut incomplete_swapcoin_groups = HashMap::<Hash160, SwapCoinsInfo>::new();
         let get_hashvalue = |s: &dyn SwapCoin| {
             let swapcoin_hashvalue = s.get_hashvalue();
             if completed_coinswap_hashvalues.contains(&swapcoin_hashvalue) {
@@ -874,22 +870,22 @@ impl Wallet {
                     incomplete_swapcoin_groups
                         .entry(swapcoin_hashvalue)
                         .or_insert((
-                            Vec::<(ListUnspentResultEntry, &IncomingSwapCoin)>::new(),
-                            Vec::<(ListUnspentResultEntry, &OutgoingSwapCoin)>::new(),
+                            Vec::<(&IncomingSwapCoin, ListUnspentResultEntry)>::new(),
+                            Vec::<(&OutgoingSwapCoin, ListUnspentResultEntry)>::new(),
                         ))
                         .0
-                        .push((utxo, s));
+                        .push((s, utxo));
                 }
             } else if let Some(s) = self.find_outgoing_swapcoin(multisig_redeemscript) {
                 if let Some(swapcoin_hashvalue) = get_hashvalue(s) {
                     incomplete_swapcoin_groups
                         .entry(swapcoin_hashvalue)
                         .or_insert((
-                            Vec::<(ListUnspentResultEntry, &IncomingSwapCoin)>::new(),
-                            Vec::<(ListUnspentResultEntry, &OutgoingSwapCoin)>::new(),
+                            Vec::<(&IncomingSwapCoin, ListUnspentResultEntry)>::new(),
+                            Vec::<(&OutgoingSwapCoin, ListUnspentResultEntry)>::new(),
                         ))
                         .1
-                        .push((utxo, s));
+                        .push((s, utxo));
                 }
             } else {
                 continue;
@@ -930,7 +926,7 @@ impl Wallet {
 
     // live contract refers to a contract tx which has been broadcast
     // i.e. where there are UTXOs protected by contract_redeemscript's that we know about
-    pub fn find_live_contract_unspents(&self) -> Result<OutgoingCoinsPair, WalletError> {
+    pub fn find_live_contract_unspents(&self) -> Result<SwapCoinsInfo, WalletError> {
         // populate hashmaps where key is contract scriptpubkey and value is the swapcoin
         let contract_scriptpubkeys_incoming_swapcoins =
             self.create_contract_scriptpubkey_incoming_swapcoin_hashmap();
