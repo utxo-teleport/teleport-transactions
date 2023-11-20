@@ -230,7 +230,7 @@ pub fn parse_field<T: std::str::FromStr>(value: Option<&String>, default: T) -> 
     match value {
         Some(value) => value
             .parse()
-            .map_err(|_e| io::Error::new(ErrorKind::InvalidData, format!("parsing failed"))),
+            .map_err(|_e| io::Error::new(ErrorKind::InvalidData, "parsing failed")),
         None => Ok(default),
     }
 }

@@ -63,10 +63,7 @@ impl TakerConfig {
             }
         };
 
-        let taker_config_section = section
-            .get("taker_config")
-            .cloned()
-            .unwrap_or_else(HashMap::new);
+        let taker_config_section = section.get("taker_config").cloned().unwrap_or_default();
 
         Ok(Self {
             refund_locktime: parse_field(

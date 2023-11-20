@@ -78,10 +78,7 @@ impl MakerConfig {
             }
         };
 
-        let maker_config_section = section
-            .get("maker_config")
-            .cloned()
-            .unwrap_or_else(HashMap::new);
+        let maker_config_section = section.get("maker_config").cloned().unwrap_or_default();
 
         Ok(MakerConfig {
             port: parse_field(maker_config_section.get("port"), default_config.port)
