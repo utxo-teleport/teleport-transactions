@@ -1,8 +1,8 @@
 //! Taker configuration. Controlling various behavior.
 
-use std::{collections::HashMap, io, path::PathBuf};
+use std::{io, path::PathBuf};
 
-use crate::utill::{parse_field, parse_toml};
+use crate::utill::{get_config_dir, parse_field, parse_toml, write_default_config};
 /// TODO: Optionally read this from a config file.
 #[derive(Debug, Clone, PartialEq)]
 pub struct TakerConfig {
@@ -45,22 +45,30 @@ impl TakerConfig {
             if path.exists() {
                 parse_toml(path)?
             } else {
+                let default_taker_config_path = get_config_dir().join("taker.toml");
+                if !default_taker_config_path.exists() {
+                    create_default_taker_dirs(&default_taker_config_path);
+                }
                 log::warn!(
                     "Taker config file not found at path : {}, using default config",
                     path.display()
                 );
-                HashMap::new()
+                parse_toml(&default_taker_config_path)?
             }
         } else {
             let default_path = PathBuf::from("taker.toml");
             if default_path.exists() {
                 parse_toml(&default_path)?
             } else {
+                let default_taker_config_path = get_config_dir().join("taker.toml");
+                if !default_taker_config_path.exists() {
+                    create_default_taker_dirs(&default_taker_config_path);
+                }
                 log::warn!(
                     "Taker config file not found in default path: {}, using default config",
                     default_path.display()
                 );
-                HashMap::new()
+                parse_toml(&default_taker_config_path)?
             }
         };
 
@@ -119,6 +127,25 @@ impl TakerConfig {
             .unwrap_or(default_config.reconnect_attempt_timeout_sec),
         })
     }
+}
+
+fn create_default_taker_dirs(default_taker_config_path: &PathBuf) {
+    let config_string = String::from(
+        "\
+                        [taker_config]\n\
+                        refund_locktime = 48\n\
+                        refund_locktime_step = 48\n\
+                        first_connect_attempts = 5\n\
+                        first_connect_sleep_delay_sec = 1\n\
+                        first_connect_attempt_timeout_sec = 20\n\
+                        reconnect_attempts = 3200\n\
+                        reconnect_short_sleep_delay = 10\n\
+                        reconnect_long_sleep_delay = 60\n\
+                        short_long_sleep_delay_transition = 60\n\
+                        reconnect_attempt_timeout_sec = 300\n\
+                        ",
+    );
+    write_default_config(default_taker_config_path, config_string).unwrap();
 }
 
 #[cfg(test)]
