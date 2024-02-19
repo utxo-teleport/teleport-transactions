@@ -54,6 +54,12 @@ impl FromStr for Destination {
     }
 }
 
+/// Enum representing different errors that can occur when parsing a coin to spend.
+#[derive(Debug, PartialEq)]
+pub enum ParseCoinError {
+    ErrorMessage(String),
+}
+
 /// Enum representing different ways to identify a coin to spend.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CoinToSpend {
@@ -65,27 +71,41 @@ pub enum CoinToSpend {
     },
 }
 
-fn parse_short_form_coin(s: &str) -> Option<CoinToSpend> {
-    //example short form: 568a4e..83a2e8:0
-    if s.len() < 15 {
-        return None;
+/*    Short-form coin example format:
+        prefix : 123abc
+        dots   : ..
+        suffix : def456
+        vout   : 0
+*/
+fn parse_short_form_coin(s: &str) -> Result<CoinToSpend, ParseCoinError> {
+    if s.len() == 16 {
+        let dots = &s[6..8];
+        if dots != ".." {
+            return Err(ParseCoinError::ErrorMessage(
+                "Coin to spend (short form) has invalid dots!".to_string(),
+            ));
+        }
+        let colon = s.chars().nth(14).unwrap();
+        if colon != ':' {
+            return Err(ParseCoinError::ErrorMessage(
+                "Coin to spend (short form) has invalid colon!".to_string(),
+            ));
+        }
+        let prefix = String::from(&s[0..6]);
+        let suffix = String::from(&s[8..14]);
+        let vout = s[15..]
+            .parse::<u32>()
+            .map_err(|e| ParseCoinError::ErrorMessage(e.to_string()))?;
+        Ok(CoinToSpend::ShortForm {
+            prefix,
+            suffix,
+            vout,
+        })
+    } else {
+        Err(ParseCoinError::ErrorMessage(
+            "Coin to spend (short form) has invalid length!".to_string(),
+        ))
     }
-    let dots = &s[6..8];
-    if dots != ".." {
-        return None;
-    }
-    let colon = s.chars().nth(14).unwrap();
-    if colon != ':' {
-        return None;
-    }
-    let prefix = String::from(&s[0..6]);
-    let suffix = String::from(&s[8..14]);
-    let vout = s[15..].parse::<u32>().ok()?;
-    Some(CoinToSpend::ShortForm {
-        prefix,
-        suffix,
-        vout,
-    })
 }
 
 impl FromStr for CoinToSpend {
@@ -97,7 +117,7 @@ impl FromStr for CoinToSpend {
             Ok(CoinToSpend::LongForm(op))
         } else {
             let short_form = parse_short_form_coin(s);
-            if let Some(cointospend) = short_form {
+            if let Ok(cointospend) = short_form {
                 Ok(cointospend)
             } else {
                 Err(parsed_outpoint.err().unwrap())
@@ -245,6 +265,11 @@ impl Wallet {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wallet::rpc;
+    use bip39::Mnemonic;
+    use bitcoin::Txid;
+    use bitcoind::bitcoincore_rpc::Auth;
+    use std::path::PathBuf;
 
     #[test]
     fn test_send_amount_parsing() {
@@ -307,21 +332,100 @@ mod tests {
             CoinToSpend::from_str(valid_outpoint_str).unwrap(),
             coin_to_spend_long_form
         );
+    }
 
-        let valid_short_form_str = "123abc..def456:0";
+    #[test]
+    fn test_parse_short_form_coin_valid() {
+        let coin_str = "123abc..456def:0";
+        let expected_coin = CoinToSpend::ShortForm {
+            prefix: String::from("123abc"),
+            suffix: String::from("456def"),
+            vout: 0,
+        };
+        assert_eq!(parse_short_form_coin(coin_str), Ok(expected_coin));
+    }
+
+    #[test]
+    fn test_parse_short_form_coin_dots_valid() {
+        let coin_str = "123abc..456def:0";
         assert!(matches!(
-            CoinToSpend::from_str(valid_short_form_str),
+            CoinToSpend::from_str(coin_str),
             Ok(CoinToSpend::ShortForm { .. })
         ));
-        let mut invalid_short_form_str = "123ab..def456:0";
-        assert!(CoinToSpend::from_str(invalid_short_form_str).is_err());
+    }
 
-        invalid_short_form_str = "123abc.def456:0";
-        assert!(CoinToSpend::from_str(invalid_short_form_str).is_err());
+    #[test]
+    fn test_parse_short_form_coin_dots_invalid() {
+        let coin_str = "123abc.456def:0";
+        assert!(parse_short_form_coin(coin_str).is_err());
+    }
 
-        invalid_short_form_str = "123abc..def4560";
-        assert!(CoinToSpend::from_str(invalid_short_form_str).is_err());
+    #[test]
+    fn test_parse_short_form_coin_invalid_length() {
+        let coin_str = "123abc.456def:0";
+        assert!(CoinToSpend::from_str(coin_str).is_err());
+    }
 
-        assert!(CoinToSpend::from_str("invalid").is_err());
+    #[test]
+    fn test_parse_short_form_coin_vout_missing() {
+        let coin_str = "123abc..456def";
+        assert!(parse_short_form_coin(coin_str).is_err());
+    }
+
+    #[test]
+    fn test_parse_short_form_coin_invalid_colon() {
+        let coin_str = "123abc..456def0";
+        assert!(CoinToSpend::from_str(coin_str).is_err());
+    }
+
+    #[test]
+    fn test_parse_short_form_coin_invalid_string() {
+        let coin_str = "invalid";
+        assert!(CoinToSpend::from_str(coin_str).is_err());
+    }
+
+    #[test]
+    fn test_create_direct_send() {
+        let mut path = PathBuf::new();
+        path.push("/tmp/teleport/test-wallet-direct-send");
+
+        let rpc_config = rpc::RPCConfig {
+            url: "http://localhost:8332".to_string(),
+            auth: Auth::UserPass("username".to_string(), "password".to_string()),
+            network: Network::Testnet,
+            wallet_name: String::from("test-wallet"),
+        };
+        // let mnemonic = "abandon ability able about above absent absorb abstract absurd abuse access accident";
+        let mnemonic_seedphrase = Mnemonic::generate(12).unwrap().to_string();
+        let passphrase =
+            "abandon ability able about above absent absorb abstract absurd abuse access accident"
+                .trim()
+                .to_string();
+
+        let mut wallet_instance = Wallet::init(&path, &rpc_config, mnemonic_seedphrase, passphrase)
+            .expect("wallet instance error");
+
+        let fee_rate = 100_000;
+        let send_amount = SendAmount::Amount(Amount::from_sat(1000));
+        let destination = Destination::Wallet;
+        let coins_to_spend = vec![
+            CoinToSpend::LongForm(OutPoint {
+                txid: Txid::from_str(
+                    "5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456",
+                )
+                .unwrap(),
+                vout: 0,
+            }),
+            CoinToSpend::ShortForm {
+                prefix: "123abc".to_string(),
+                suffix: "def456".to_string(),
+                vout: 0,
+            },
+        ];
+
+        let result =
+            wallet_instance.create_direct_send(fee_rate, send_amount, destination, &coins_to_spend);
+
+        assert!(result.is_ok());
     }
 }
