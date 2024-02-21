@@ -51,6 +51,7 @@ use super::{
 const HARDENDED_DERIVATION: &str = "m/84'/1'/0'";
 
 /// Represents a Bitcoin wallet with associated functionality and data.
+#[derive(Debug)]
 pub struct Wallet {
     pub(crate) rpc: Client,
     wallet_file_path: PathBuf,

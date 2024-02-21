@@ -5,7 +5,7 @@
 //! Spawns one Taker and multiple Makers, with/without special behavior, connect them to bitcoind regtest node,
 //! and initializes the database.
 //!
-//! The tests data are stored in the `tests/temp-files` directory, which is auto-removed after each successful test.
+//! The tests data are stored in the `/tmp/teleport/tests/temp-files/` directory, which is auto-removed after each successful test or after a reboot.
 //! Do not invoke [TestFramework::stop] function at the end of the test, to persis this data for debugging.
 //!
 //! The test data also includes the backend bitcoind data-directory, which is useful for observing the blockchain states after a swap.

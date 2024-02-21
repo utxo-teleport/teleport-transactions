@@ -265,11 +265,18 @@ impl Wallet {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::wallet::rpc;
+    use crate::{utill, wallet::rpc};
     use bip39::Mnemonic;
-    use bitcoin::Txid;
-    use bitcoind::bitcoincore_rpc::Auth;
-    use std::path::PathBuf;
+    use bitcoin::{
+        secp256k1::rand::{distributions::Alphanumeric, thread_rng, Rng},
+        Txid,
+    };
+    use bitcoind::{bitcoincore_rpc::Auth, BitcoinD, Conf};
+    use rpc::RPCConfig;
+    use std::{
+        path::PathBuf,
+        sync::{Arc, RwLock},
+    };
 
     #[test]
     fn test_send_amount_parsing() {
@@ -386,46 +393,167 @@ mod tests {
 
     #[test]
     fn test_create_direct_send() {
-        let mut path = PathBuf::new();
-        path.push("/tmp/teleport/test-wallet-direct-send");
+        #[derive(Debug)]
+        pub struct DirectSendTest {
+            bitcoind: BitcoinD,
+            _temp_dir: PathBuf,
+            shutdown: Arc<RwLock<bool>>,
+        }
+        fn get_random_tmp_dir() -> PathBuf {
+            let s: String = thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(8)
+                .map(char::from)
+                .collect();
+            let path = "/tmp/teleport/direct-send-test/".to_string() + &s;
+            PathBuf::from(path)
+        }
+        // For this we will initialise a Bitcoind in the background
 
-        let rpc_config = rpc::RPCConfig {
-            url: "http://localhost:8332".to_string(),
-            auth: Auth::UserPass("username".to_string(), "password".to_string()),
-            network: Network::Testnet,
-            wallet_name: String::from("test-wallet"),
-        };
-        // let mnemonic = "abandon ability able about above absent absorb abstract absurd abuse access accident";
-        let mnemonic_seedphrase = Mnemonic::generate(12).unwrap().to_string();
-        let passphrase =
-            "abandon ability able about above absent absorb abstract absurd abuse access accident"
-                .trim()
-                .to_string();
+        impl DirectSendTest {
+            pub async fn init(bitcoind_conf: Option<Conf<'_>>) -> Arc<Self> {
+                utill::setup_logger();
+                let temp_dir = get_random_tmp_dir();
+                // Remove if previously existing
+                if temp_dir.exists() {
+                    std::fs::remove_dir_all::<PathBuf>(temp_dir.clone()).unwrap();
+                }
+                println!("temporary directory : {}", temp_dir.display());
 
-        let mut wallet_instance = Wallet::init(&path, &rpc_config, mnemonic_seedphrase, passphrase)
-            .expect("wallet instance error");
+                // Initiate the bitcoind backend.
+                let mut conf = bitcoind_conf.unwrap_or_default();
+                conf.args.push("-txindex=1"); // txindex is must, or else wallet sync won't work
+                conf.staticdir = Some(temp_dir.join(".bitcoin"));
+                log::info!("bitcoind configuration: {:?}", conf.args);
+                let bitcoind = BitcoinD::from_downloaded_with_conf(&conf).unwrap();
+                // Generate initial 101 blocks
+                let mining_address = bitcoind
+                    .client
+                    .get_new_address(None, None)
+                    .unwrap()
+                    .require_network(bitcoind::bitcoincore_rpc::bitcoin::Network::Regtest)
+                    .unwrap();
+                bitcoind
+                    .client
+                    .generate_to_address(101, &mining_address)
+                    .unwrap();
+                log::info!("bitcoind initiated!!");
 
-        let fee_rate = 100_000;
-        let send_amount = SendAmount::Amount(Amount::from_sat(1000));
-        let destination = Destination::Wallet;
-        let coins_to_spend = vec![
-            CoinToSpend::LongForm(OutPoint {
-                txid: Txid::from_str(
-                    "5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456",
-                )
-                .unwrap(),
-                vout: 0,
-            }),
-            CoinToSpend::ShortForm {
-                prefix: "123abc".to_string(),
-                suffix: "def456".to_string(),
-                vout: 0,
-            },
-        ];
+                let shutdown = Arc::new(RwLock::new(false));
+                let test_framework = Arc::new(Self {
+                    bitcoind,
+                    _temp_dir: temp_dir.clone(),
+                    shutdown,
+                });
+                log::info!("spawning block generation thread");
+                let tf_clone = test_framework.clone();
+                std::thread::spawn(move || {
+                    while !*tf_clone.shutdown.read().unwrap() {
+                        std::thread::sleep(std::time::Duration::from_millis(500));
+                        tf_clone.generate_1_block();
+                        log::debug!("created 1 block");
+                    }
+                    log::info!("ending block generation thread");
+                });
+                test_framework
+            }
+            /// Generate 1 block in the backend bitcoind.
 
-        let result =
-            wallet_instance.create_direct_send(fee_rate, send_amount, destination, &coins_to_spend);
+            pub fn generate_1_block(&self) {
+                let mining_address = self
+                    .bitcoind
+                    .client
+                    .get_new_address(None, None)
+                    .unwrap()
+                    .require_network(bitcoind::bitcoincore_rpc::bitcoin::Network::Regtest)
+                    .unwrap();
+                self.bitcoind
+                    .client
+                    .generate_to_address(1, &mining_address)
+                    .unwrap();
+            }
 
-        assert!(result.is_ok());
+            /// Stop bitcoind and clean up all test data.
+            pub fn stop(&self) {
+                log::info!("Stopping Test Framework");
+                // stop all framework threads.
+                *self.shutdown.write().unwrap() = true;
+                // stop bitcoind
+                let _ = self.bitcoind.client.stop().unwrap();
+            }
+
+            pub fn get_block_count(&self) -> u64 {
+                self.bitcoind.client.get_block_count().unwrap()
+            }
+        }
+
+        /// Initializes a [TestFramework] given a [RPCConfig].
+        impl From<&DirectSendTest> for RPCConfig {
+            fn from(value: &DirectSendTest) -> Self {
+                println!(" ----- initialising -----");
+                let url = value.bitcoind.rpc_url().split_at(7).1.to_string();
+                let auth = Auth::CookieFile(value.bitcoind.params.cookie_file.clone());
+                let network = utill::str_to_bitcoin_network(
+                    value
+                        .bitcoind
+                        .client
+                        .get_blockchain_info()
+                        .unwrap()
+                        .chain
+                        .as_str(),
+                );
+                let mut path = PathBuf::new();
+                path.push("/tmp/teleport/direct-send-test/test-wallet");
+
+                let rpc_config = rpc::RPCConfig {
+                    url: "http://localhost:18444".to_string(),
+                    auth: Auth::UserPass(
+                        "regtestrpcuser".to_string(),
+                        "regtestrpcpass".to_string(),
+                    ),
+                    network: Network::Regtest,
+                    wallet_name: String::from("test_wallet_ds"),
+                };
+                // allowed 12 words example = "abandon ability able about above absent absorb abstract absurd abuse access accident";
+                let mnemonic_seedphrase = Mnemonic::generate(12).unwrap().to_string();
+
+                let mut wallet_instance =
+                    Wallet::init(&path, &rpc_config, mnemonic_seedphrase, "".to_string())
+                        .expect("Hmm getting instance error");
+                println!(" ------ wallet instance - {:#?}", wallet_instance);
+                let fee_rate = 100_000;
+                let send_amount = SendAmount::Amount(Amount::from_sat(1000));
+                let destination = Destination::Wallet;
+                let coins_to_spend = vec![
+                    CoinToSpend::LongForm(OutPoint {
+                        txid: Txid::from_str(
+                            "5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456",
+                        )
+                        .unwrap(),
+                        vout: 0,
+                    }),
+                    CoinToSpend::ShortForm {
+                        prefix: "123abc".to_string(),
+                        suffix: "def456".to_string(),
+                        vout: 0,
+                    },
+                ];
+
+                let result = wallet_instance.create_direct_send(
+                    fee_rate,
+                    send_amount,
+                    destination,
+                    &coins_to_spend,
+                );
+                assert!(result.is_ok());
+
+                Self {
+                    url,
+                    auth,
+                    network,
+                    ..Default::default()
+                }
+            }
+        }
     }
 }
