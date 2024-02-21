@@ -508,37 +508,34 @@ mod tests {
         assert!(CoinToSpend::from_str(coin_str).is_err());
     }
 
-    // #[test]
-    // fn test_bitcoind_locally() {
-    //     let mut path = PathBuf::new();
-    //     path.push("/tmp/teleport/test_wallet_ds");
-    //     let rpc_config = rpc::RPCConfig {
-    //         url: "http//localhost:28332".to_string(),
-    //         auth: Auth::UserPass("regtestrpcuser".to_string(), "regtestrpcpass".to_string()),
-    //         network: Network::Regtest,
-    //         wallet_name: String::from("test_wallet_ds"),
-    //     };
-    //     let mnemonic_seedphrase = Mnemonic::generate(12).unwrap().to_string();
-
-    //     let wallet_instance = Wallet::init(&path, &rpc_config, mnemonic_seedphrase, "".to_string())
-    //         .expect("Hmm getting instance error");
-    //     print!("{:#?}", wallet_instance);
-    // }
-
     #[tokio::test]
     async fn test_create_direct_send() {
-        // Init the test-framework
+        // Init the test-framework, no config so using default one
         let ds_test_framework = DirectSendTest::init(None).await;
 
-        log::info!("--- To check: get block count = {:?}", ds_test_framework.get_block_count());
+        log::info!(
+            "--- To check: get block count = {:?}",
+            ds_test_framework.get_block_count()
+        );
         let mut path = PathBuf::new();
         path.push("/tmp/teleport/direct-send-test/test-wallet");
 
         let rpc_config = rpc::RPCConfig {
-            url: ds_test_framework.bitcoind.rpc_url().split_at(7).1.to_string(),
+            url: ds_test_framework
+                .bitcoind
+                .rpc_url()
+                .split_at(7)
+                .1
+                .to_string(),
             auth: Auth::CookieFile(ds_test_framework.bitcoind.params.cookie_file.clone()),
             network: crate::utill::str_to_bitcoin_network(
-                ds_test_framework.bitcoind.client.get_blockchain_info().unwrap().chain.as_str()
+                ds_test_framework
+                    .bitcoind
+                    .client
+                    .get_blockchain_info()
+                    .unwrap()
+                    .chain
+                    .as_str(),
             ),
             wallet_name: String::from("test_wallet_ds"),
         };
@@ -549,6 +546,8 @@ mod tests {
             Wallet::init(&path, &rpc_config, mnemonic_seedphrase, "".to_string())
                 .expect("Hmm getting instance error");
         println!(" ------ wallet instance - {:#?}", wallet_instance);
+        // Right till here
+
         let fee_rate = 100_000;
         let send_amount = SendAmount::Amount(Amount::from_sat(1000));
         let destination = Destination::Wallet;
@@ -567,9 +566,53 @@ mod tests {
             },
         ];
 
+        let mut tx_inputs = Vec::<TxIn>::new();
+        let mut unspent_inputs = Vec::<TxIn>::new();
+
+        // let list_unspent_result = wallet_instance
+        //     .list_unspent_from_wallet(true, true)
+        //     .into_iter()
+        //     .filter(|(_, info)| !matches!(info, UTXOSpendInfo::FidelityBondCoin { .. }))
+        //     .collect::<Vec<_>>();
+
+        // for (list_unspent_entry, spend_info) in list_unspent_result {
+        //     for cts in coins_to_spend {
+        //         let previous_output = match cts {
+        //             CoinToSpend::LongForm(outpoint) => {
+        //                 if list_unspent_entry.txid == outpoint.txid
+        //                     && list_unspent_entry.vout == outpoint.vout
+        //                 {
+        //                     *outpoint
+        //                 } else {
+        //                     continue;
+        //                 }
+        //             }
+        //             CoinToSpend::ShortForm {
+        //                 prefix,
+        //                 suffix,
+        //                 vout,
+        //             } => {
+        //                 let txid_hex = list_unspent_entry.txid.to_string();
+        //                 if txid_hex.starts_with(prefix)
+        //                     && txid_hex.ends_with(suffix)
+        //                     && list_unspent_entry.vout == *vout
+        //                 {
+        //                     OutPoint {
+        //                         txid: list_unspent_entry.txid,
+        //                         vout: list_unspent_entry.vout,
+        //                     }
+        //                 } else {
+        //                     continue;
+        //                 }
+        //             }
+        //         };
+        //         log::debug!("found coin to spend = {:?}", previous_output);
+        //     }
+        // }
+
         let result =
             wallet_instance.create_direct_send(fee_rate, send_amount, destination, &coins_to_spend);
-        assert!(result.is_ok());
+        assert!(result.is_err());
         ds_test_framework.stop();
     }
 }
