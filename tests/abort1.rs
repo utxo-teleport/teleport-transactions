@@ -55,7 +55,7 @@ async fn test_stop_taker_after_setup() {
                 .get_next_external_address()
                 .unwrap();
             test_framework.send_to_address(&maker_addrs, Amount::from_btc(0.05).unwrap());
-        })
+        });
     }
 
     // Coins for fidelity creation
@@ -73,12 +73,7 @@ async fn test_stop_taker_after_setup() {
     test_framework.generate_1_block();
 
     // Get the original balances
-    let org_taker_balance = taker
-        .read()
-        .unwrap()
-        .get_wallet()
-        .balance(false, false)
-        .unwrap();
+    let org_taker_balance = taker.read().unwrap().get_wallet().balance().unwrap();
 
     // ---- Start Servers and attempt Swap ----
 
@@ -110,14 +105,7 @@ async fn test_stop_taker_after_setup() {
     // Bonds are created automatically after spawning the maker server.
     let org_maker_balances = makers
         .iter()
-        .map(|maker| {
-            maker
-                .get_wallet()
-                .read()
-                .unwrap()
-                .balance(false, false)
-                .unwrap()
-        })
+        .map(|maker| maker.get_wallet().read().unwrap().balance().unwrap())
         .collect::<Vec<_>>();
 
     // Spawn a Taker coinswap thread.
@@ -152,24 +140,14 @@ async fn test_stop_taker_after_setup() {
     assert_eq!(taker.read().unwrap().get_wallet().get_swapcoins_count(), 0);
 
     // Check everybody looses mining fees of contract txs.
-    let taker_balance = taker
-        .read()
-        .unwrap()
-        .get_wallet()
-        .balance(false, false)
-        .unwrap();
+    let taker_balance = taker.read().unwrap().get_wallet().balance().unwrap();
     assert_eq!(org_taker_balance - taker_balance, Amount::from_sat(4227));
 
     makers
         .iter()
         .zip(org_maker_balances.iter())
         .for_each(|(maker, org_balance)| {
-            let new_balance = maker
-                .get_wallet()
-                .read()
-                .unwrap()
-                .balance(false, false)
-                .unwrap();
+            let new_balance = maker.get_wallet().read().unwrap().balance().unwrap();
             assert_eq!(*org_balance - new_balance, Amount::from_sat(4227));
         });
 

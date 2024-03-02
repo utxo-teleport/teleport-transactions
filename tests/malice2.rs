@@ -45,7 +45,7 @@ async fn malice2_maker_broadcast_contract_prematurely() {
                 .get_next_external_address()
                 .unwrap();
             test_framework.send_to_address(&maker_addrs, Amount::from_btc(0.05).unwrap());
-        })
+        });
     }
 
     // Coins for fidelity creation
@@ -62,12 +62,7 @@ async fn malice2_maker_broadcast_contract_prematurely() {
     // confirm balances
     test_framework.generate_1_block();
 
-    let org_take_balance = taker
-        .read()
-        .unwrap()
-        .get_wallet()
-        .balance(false, false)
-        .unwrap();
+    let org_take_balance = taker.read().unwrap().get_wallet().balance().unwrap();
 
     // ---- Start Servers and attempt Swap ----
 
@@ -96,14 +91,7 @@ async fn malice2_maker_broadcast_contract_prematurely() {
     // Bonds are created automatically after spawning the maker server.
     let org_maker_balances = makers
         .iter()
-        .map(|maker| {
-            maker
-                .get_wallet()
-                .read()
-                .unwrap()
-                .balance(false, false)
-                .unwrap()
-        })
+        .map(|maker| maker.get_wallet().read().unwrap().balance().unwrap())
         .collect::<BTreeSet<_>>();
 
     // Spawn a Taker coinswap thread.
@@ -128,22 +116,10 @@ async fn malice2_maker_broadcast_contract_prematurely() {
     // ---- After Swap checks ----
     let maker_balances = makers
         .iter()
-        .map(|maker| {
-            maker
-                .get_wallet()
-                .read()
-                .unwrap()
-                .balance(false, false)
-                .unwrap()
-        })
+        .map(|maker| maker.get_wallet().read().unwrap().balance().unwrap())
         .collect::<BTreeSet<_>>();
 
-    let taker_balance = taker
-        .read()
-        .unwrap()
-        .get_wallet()
-        .balance(false, false)
-        .unwrap();
+    let taker_balance = taker.read().unwrap().get_wallet().balance().unwrap();
 
     assert_eq!(maker_balances.first().unwrap(), &Amount::from_sat(14994773));
 

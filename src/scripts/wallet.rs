@@ -119,7 +119,13 @@ pub fn display_wallet_balance(
 
     let long_form = long_form.unwrap_or(false);
 
-    let utxos_incl_fbonds = wallet.list_unspent_from_wallet(false, true)?;
+    let mut utxos_incl_fbonds = wallet.list_fidelity_unspend_from_wallet()?;
+    let mut seed_coin_utxo = wallet.list_descriptor_utxo_unspend_from_wallet()?;
+    let mut swap_coin_utxo = wallet.list_swap_coin_unspend_from_wallet()?;
+
+    utxos_incl_fbonds.append(&mut seed_coin_utxo);
+    utxos_incl_fbonds.append(&mut swap_coin_utxo);
+
     let (mut utxos, mut fidelity_bond_utxos): (Vec<_>, Vec<_>) =
         utxos_incl_fbonds.iter().partition(|(_, usi)| {
             !matches!(
@@ -139,7 +145,7 @@ pub fn display_wallet_balance(
     println!("= Spendable wallet balance =");
     println!(
         "{:16} {:24} {:^8} {:<7} value",
-        "coin", "address", "type", "conf",
+        "coin", "address", "type", "conf"
     );
     for (utxo, _) in utxos {
         let txid = utxo.txid.to_string();
@@ -178,16 +184,16 @@ pub fn display_wallet_balance(
 
             println!(
                 "{:16} {:8} {:8} {:<15} {:<7} value",
-                "coin", "type", "preimage", "locktime/blocks", "conf",
+                "coin", "type", "preimage", "locktime/blocks", "conf"
             );
             for ((utxo, swapcoin), contract_type) in utxo_incoming_swapcoins
                 .iter()
-                .map(|(i, l)| (l, (*i as &dyn WalletSwapCoin)))
+                .map(|(i, l)| (l, *i as &dyn WalletSwapCoin))
                 .zip(repeat("hashlock"))
                 .chain(
                     utxo_outgoing_swapcoins
                         .iter()
-                        .map(|(o, l)| (l, (*o as &dyn WalletSwapCoin)))
+                        .map(|(o, l)| (l, *o as &dyn WalletSwapCoin))
                         .zip(repeat("timelock")),
                 )
             {
@@ -210,8 +216,8 @@ pub fn display_wallet_balance(
             if incoming_swapcoins_balance != Amount::ZERO {
                 println!(
                     "Amount earned if coinswap is successful = {}",
-                    (incoming_swapcoins_balance.to_signed().unwrap()
-                        - outgoing_swapcoins_balance.to_signed().unwrap()),
+                    incoming_swapcoins_balance.to_signed().unwrap()
+                        - outgoing_swapcoins_balance.to_signed().unwrap()
                 );
             }
             println!(
@@ -367,13 +373,13 @@ pub fn direct_send(
     }
     println!(
         "Actual fee rate = {:.3} sat/vb",
-        test_mempool_accept_result
+        (test_mempool_accept_result
             .fees
             .as_ref()
             .unwrap()
             .base
-            .to_sat() as f64
-            / test_mempool_accept_result.vsize.unwrap() as f64
+            .to_sat() as f64)
+            / (test_mempool_accept_result.vsize.unwrap() as f64)
     );
     if dont_broadcast {
         println!("Tx = \n{}", txhex);
