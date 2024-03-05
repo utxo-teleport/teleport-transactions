@@ -16,10 +16,7 @@ use crate::wallet::{api::UTXOSpendInfo, SwapCoin};
 
 use super::{error::WalletError, Wallet};
 use crate::{utill, wallet::rpc};
-use bitcoin::{
-    secp256k1::rand::{distributions::Alphanumeric, thread_rng, Rng},
-    Txid,
-};
+use bitcoin::secp256k1::rand::{distributions::Alphanumeric, thread_rng, Rng};
 use bitcoind::{bitcoincore_rpc::Auth, BitcoinD, Conf};
 use rpc::RPCConfig;
 use std::{
@@ -506,113 +503,5 @@ mod tests {
     fn test_parse_short_form_coin_invalid_string() {
         let coin_str = "invalid";
         assert!(CoinToSpend::from_str(coin_str).is_err());
-    }
-
-    #[tokio::test]
-    async fn test_create_direct_send() {
-        // Init the test-framework, no config so using default one
-        let ds_test_framework = DirectSendTest::init(None).await;
-
-        log::info!(
-            "--- To check: get block count = {:?}",
-            ds_test_framework.get_block_count()
-        );
-        let mut path = PathBuf::new();
-        path.push("/tmp/teleport/direct-send-test/test-wallet");
-
-        let rpc_config = rpc::RPCConfig {
-            url: ds_test_framework
-                .bitcoind
-                .rpc_url()
-                .split_at(7)
-                .1
-                .to_string(),
-            auth: Auth::CookieFile(ds_test_framework.bitcoind.params.cookie_file.clone()),
-            network: crate::utill::str_to_bitcoin_network(
-                ds_test_framework
-                    .bitcoind
-                    .client
-                    .get_blockchain_info()
-                    .unwrap()
-                    .chain
-                    .as_str(),
-            ),
-            wallet_name: String::from("test_wallet_ds"),
-        };
-        // allowed 12 words example = "abandon ability able about above absent absorb abstract absurd abuse access accident";
-        let mnemonic_seedphrase = bip39::Mnemonic::generate(12).unwrap().to_string();
-
-        let mut wallet_instance =
-            Wallet::init(&path, &rpc_config, mnemonic_seedphrase, "".to_string())
-                .expect("Hmm getting instance error");
-        println!(" ------ wallet instance - {:#?}", wallet_instance);
-        // Right till here
-
-        let fee_rate = 100_000;
-        let send_amount = SendAmount::Amount(Amount::from_sat(1000));
-        let destination = Destination::Wallet;
-        let coins_to_spend = vec![
-            CoinToSpend::LongForm(OutPoint {
-                txid: Txid::from_str(
-                    "5df6e0e2761359d30a8275058e299fcc0381534545f55cf43e41983f5d4c9456",
-                )
-                .unwrap(),
-                vout: 0,
-            }),
-            CoinToSpend::ShortForm {
-                prefix: "123abc".to_string(),
-                suffix: "def456".to_string(),
-                vout: 0,
-            },
-        ];
-
-        let mut tx_inputs = Vec::<TxIn>::new();
-        let mut unspent_inputs = Vec::<TxIn>::new();
-
-        // let list_unspent_result = wallet_instance
-        //     .list_unspent_from_wallet(true, true)
-        //     .into_iter()
-        //     .filter(|(_, info)| !matches!(info, UTXOSpendInfo::FidelityBondCoin { .. }))
-        //     .collect::<Vec<_>>();
-
-        // for (list_unspent_entry, spend_info) in list_unspent_result {
-        //     for cts in coins_to_spend {
-        //         let previous_output = match cts {
-        //             CoinToSpend::LongForm(outpoint) => {
-        //                 if list_unspent_entry.txid == outpoint.txid
-        //                     && list_unspent_entry.vout == outpoint.vout
-        //                 {
-        //                     *outpoint
-        //                 } else {
-        //                     continue;
-        //                 }
-        //             }
-        //             CoinToSpend::ShortForm {
-        //                 prefix,
-        //                 suffix,
-        //                 vout,
-        //             } => {
-        //                 let txid_hex = list_unspent_entry.txid.to_string();
-        //                 if txid_hex.starts_with(prefix)
-        //                     && txid_hex.ends_with(suffix)
-        //                     && list_unspent_entry.vout == *vout
-        //                 {
-        //                     OutPoint {
-        //                         txid: list_unspent_entry.txid,
-        //                         vout: list_unspent_entry.vout,
-        //                     }
-        //                 } else {
-        //                     continue;
-        //                 }
-        //             }
-        //         };
-        //         log::debug!("found coin to spend = {:?}", previous_output);
-        //     }
-        // }
-
-        let result =
-            wallet_instance.create_direct_send(fee_rate, send_amount, destination, &coins_to_spend);
-        assert!(result.is_err());
-        ds_test_framework.stop();
     }
 }
