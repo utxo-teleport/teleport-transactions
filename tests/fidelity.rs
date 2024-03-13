@@ -2,10 +2,15 @@
 use bitcoin::{absolute::LockTime, Amount};
 use coinswap::{
     maker::{error::MakerError, start_maker_server, MakerBehavior},
-    test_framework::TestFramework,
+    market::directory::{start_directory_server, DirectoryServer},
     wallet::{FidelityError, WalletError},
 };
-use std::{thread, time::Duration};
+
+mod test_framework;
+use test_framework::*;
+
+use log::info;
+use std::{sync::Arc, thread, time::Duration};
 
 /// Test Fidelity Transactions
 ///
@@ -24,10 +29,19 @@ use std::{thread, time::Duration};
 async fn test_fidelity() {
     // ---- Setup ----
 
-    let makers_config_map = [(6102, MakerBehavior::Normal)];
+    let makers_config_map = [((6102, 19051), MakerBehavior::Normal)];
 
     let (test_framework, _, makers) =
         TestFramework::init(None, makers_config_map.into(), None).await;
+
+    info!("Initiating Directory Server .....");
+
+    let directory_server_instance =
+        Arc::new(DirectoryServer::init(Some(8080), Some(19060)).unwrap());
+    let directory_server_instance_clone = directory_server_instance.clone();
+    thread::spawn(move || {
+        start_directory_server(directory_server_instance_clone);
+    });
 
     let maker = makers.first().unwrap();
 
@@ -150,6 +164,11 @@ async fn test_fidelity() {
         let normal_balance = wallet.balance(false, false).unwrap();
         assert_eq!(normal_balance.to_sat(), 7996000);
     }
+
+    // stop directory server
+    let _ = directory_server_instance.shutdown();
+
+    thread::sleep(Duration::from_secs(10));
 
     // Stop test and clean everything.
     // comment this line if you want the wallet directory and bitcoind to live. Can be useful for
