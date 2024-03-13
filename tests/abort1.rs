@@ -2,14 +2,11 @@
 use bitcoin::Amount;
 use coinswap::{
     maker::{start_maker_server, MakerBehavior},
-    market::directory::{start_directory_server, DirectoryServer},
     taker::{SwapParams, TakerBehavior},
+    test_framework::*,
 };
-
-mod test_framework;
 use log::{info, warn};
-use std::{sync::Arc, thread, time::Duration};
-use test_framework::*;
+use std::{thread, time::Duration};
 
 /// Abort 1: TAKER Drops After Full Setup.
 /// This test demonstrates the situation where the Taker drops connection after broadcasting all the
@@ -25,8 +22,8 @@ async fn test_stop_taker_after_setup() {
 
     // 2 Makers with Normal behavior.
     let makers_config_map = [
-        ((6102, 19051), MakerBehavior::Normal),
-        ((16102, 19052), MakerBehavior::Normal),
+        (6102, MakerBehavior::Normal),
+        (16102, MakerBehavior::Normal),
     ];
 
     // Initiate test framework, Makers.
@@ -39,15 +36,6 @@ async fn test_stop_taker_after_setup() {
     .await;
 
     warn!("Running Test: Taker Cheats on Everybody.");
-
-    info!("Initiating Directory Server .....");
-
-    let directory_server_instance =
-        Arc::new(DirectoryServer::init(Some(8080), Some(19060)).unwrap());
-    let directory_server_instance_clone = directory_server_instance.clone();
-    thread::spawn(move || {
-        start_directory_server(directory_server_instance_clone);
-    });
 
     info!("Initiating Takers...");
     // Fund the Taker and Makers with 3 utxos of 0.05 btc each.
@@ -67,7 +55,7 @@ async fn test_stop_taker_after_setup() {
                 .get_next_external_address()
                 .unwrap();
             test_framework.send_to_address(&maker_addrs, Amount::from_btc(0.05).unwrap());
-        });
+        })
     }
 
     // Coins for fidelity creation
@@ -84,14 +72,53 @@ async fn test_stop_taker_after_setup() {
     // confirm balances
     test_framework.generate_1_block();
 
-    // Get the original balances
+    // Assert the original balance for taker
     let org_taker_balance = taker
         .read()
         .unwrap()
         .get_wallet()
         .balance(false, false)
         .unwrap();
+    assert!(org_taker_balance == Amount::from_btc(0.15).unwrap());
+    
+   //Assert the original balance for makers
+    // Calculate Original balance excluding fidelity bonds.
+    // Bonds are created automatically after spawning the maker server.
+    let org_maker_balances = makers
+        .iter()
+        .map(|maker| {
+            maker
+                .get_wallet()
+                .read()
+                .unwrap()
+                .balance(false, false)
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
 
+
+    // Check if utxo list looks good.
+    // Assert other interesting things from the utxo list.
+    assert_eq!(
+        taker
+            .read()
+            .unwrap()
+            .get_wallet()
+            .list_unspent_from_wallet(false, true)
+            .unwrap()
+            .len(),
+        3
+    );
+    makers.iter().for_each(|maker| {
+        let utxo_count = maker
+            .get_wallet()
+            .read()
+            .unwrap()
+            .list_unspent_from_wallet(false, false)
+            .unwrap();
+
+        assert_eq!(utxo_count.len(), 4);
+    });
     // ---- Start Servers and attempt Swap ----
 
     info!("Initiating Maker...");
@@ -107,7 +134,7 @@ async fn test_stop_taker_after_setup() {
         .collect::<Vec<_>>();
 
     // Start swap
-    thread::sleep(Duration::from_secs(360)); // Take a delay because Makers take time to fully setup.
+    thread::sleep(Duration::from_secs(20)); // Take a delay because Makers take time to fully setup.
     let swap_params = SwapParams {
         send_amount: 500000,
         maker_count: 2,
@@ -118,19 +145,7 @@ async fn test_stop_taker_after_setup() {
 
     info!("Initiating coinswap protocol");
 
-    // Calculate Original balance excluding fidelity bonds.
-    // Bonds are created automatically after spawning the maker server.
-    let org_maker_balances = makers
-        .iter()
-        .map(|maker| {
-            maker
-                .get_wallet()
-                .read()
-                .unwrap()
-                .balance(false, false)
-                .unwrap()
-        })
-        .collect::<Vec<_>>();
+   
 
     // Spawn a Taker coinswap thread.
     let taker_clone = taker.clone();
@@ -138,7 +153,7 @@ async fn test_stop_taker_after_setup() {
         taker_clone
             .write()
             .unwrap()
-            .do_coinswap(swap_params)
+            .send_coinswap(swap_params)
             .unwrap();
     });
 
@@ -152,10 +167,6 @@ async fn test_stop_taker_after_setup() {
         .for_each(|thread| thread.join().unwrap());
 
     // ---- After Swap checks ----
-
-    let _ = directory_server_instance.shutdown();
-
-    thread::sleep(Duration::from_secs(10));
 
     // Taker still has 6 swapcoins in its list
     assert_eq!(taker.read().unwrap().get_wallet().get_swapcoins_count(), 6);
@@ -186,8 +197,6 @@ async fn test_stop_taker_after_setup() {
                 .unwrap()
                 .balance(false, false)
                 .unwrap();
-            log::info!("Org Balance: {}", *org_balance);
-            log::info!("New_balance: {}", new_balance);
             assert_eq!(*org_balance - new_balance, Amount::from_sat(4227));
         });
 
