@@ -72,14 +72,38 @@ async fn test_stop_taker_after_setup() {
     // confirm balances
     test_framework.generate_1_block();
 
-    // Get the original balances
+    // Assert the original balance for taker
     let org_taker_balance = taker
         .read()
         .unwrap()
         .get_wallet()
         .balance(false, false)
         .unwrap();
+    assert!(org_taker_balance > Amount::from_btc(0.14).unwrap());
+    
 
+    // Check if utxo list looks good.
+    // TODO: Assert other interesting things from the utxo list.
+    assert_eq!(
+        taker
+            .read()
+            .unwrap()
+            .get_wallet()
+            .list_unspent_from_wallet(false, true)
+            .unwrap()
+            .len(),
+        3
+    );
+    makers.iter().for_each(|maker| {
+        let utxo_count = maker
+            .get_wallet()
+            .read()
+            .unwrap()
+            .list_unspent_from_wallet(false, false)
+            .unwrap();
+
+        assert_eq!(utxo_count.len(), 4);
+    });
     // ---- Start Servers and attempt Swap ----
 
     info!("Initiating Maker...");

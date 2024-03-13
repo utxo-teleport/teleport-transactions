@@ -51,7 +51,7 @@ fn get_random_tmp_dir() -> PathBuf {
 /// Handles initializing, operating and cleaning up of all backend processes. Bitcoind, Taker and Makers.
 #[allow(dead_code)]
 pub struct TestFramework {
-    bitcoind: BitcoinD,
+    pub bitcoind: BitcoinD,
     temp_dir: PathBuf,
     shutdown: Arc<RwLock<bool>>,
 }
