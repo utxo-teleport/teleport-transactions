@@ -2,21 +2,17 @@
 use bitcoin::Amount;
 use coinswap::{
     maker::{start_maker_server, MakerBehavior},
-    market::directory::{start_directory_server, DirectoryServer},
     taker::SwapParams,
+    test_framework::*,
 };
-
-mod test_framework;
-use test_framework::*;
-
 use log::{info, warn};
-use std::{fs::File, io::Read, path::PathBuf, sync::Arc, thread, time::Duration};
+use std::{thread, time::Duration};
 
 /// ABORT 2: Maker Drops Before Setup
 /// This test demonstrates the situation where a Maker prematurely drops connections after doing
 /// initial protocol handshake. This should not necessarily disrupt the round, the Taker will try to find
 /// more makers in his address book and carry on as usual. The Taker will mark this Maker as "bad" and will
-/// not swap this maker again.
+/// not swap with this maker again.
 ///
 /// CASE 1: Maker Drops Before Sending Sender's Signature, and Taker carries on with a new Maker.
 #[tokio::test]
@@ -25,12 +21,9 @@ async fn test_abort_case_2_move_on_with_other_makers() {
 
     // 6102 is naughty. But theres enough good ones.
     let makers_config_map = [
-        (
-            (6102, 19051),
-            MakerBehavior::CloseAtReqContractSigsForSender,
-        ),
-        ((16102, 19052), MakerBehavior::Normal),
-        ((26102, 19053), MakerBehavior::Normal),
+        (6102, MakerBehavior::CloseAtReqContractSigsForSender),
+        (16102, MakerBehavior::Normal),
+        (26102, MakerBehavior::Normal),
     ];
 
     // Initiate test framework, Makers.
@@ -38,18 +31,7 @@ async fn test_abort_case_2_move_on_with_other_makers() {
     let (test_framework, taker, makers) =
         TestFramework::init(None, makers_config_map.into(), None).await;
 
-    warn!(
-        "Running Test: Maker 6102 closes before sending sender's sigs. Taker moves on with other Makers."
-    );
-
-    info!("Initiating Directory Server .....");
-
-    let directory_server_instance =
-        Arc::new(DirectoryServer::init(Some(8080), Some(19060)).unwrap());
-    let directory_server_instance_clone = directory_server_instance.clone();
-    thread::spawn(move || {
-        start_directory_server(directory_server_instance_clone);
-    });
+    warn!("Running Test: Maker 6102 closes before sending sender's sigs. Taker moves on with other Makers.");
 
     info!("Initiating Takers...");
     // Fund the Taker and Makers with 3 utxos of 0.05 btc each.
@@ -69,7 +51,7 @@ async fn test_abort_case_2_move_on_with_other_makers() {
                 .get_next_external_address()
                 .unwrap();
             test_framework.send_to_address(&maker_addrs, Amount::from_btc(0.05).unwrap());
-        });
+        })
     }
 
     // Coins for fidelity creation
@@ -86,6 +68,52 @@ async fn test_abort_case_2_move_on_with_other_makers() {
     // confirm balances
     test_framework.generate_1_block();
 
+    // Assert the original balance for taker
+     let org_taker_balance = taker
+     .read()
+     .unwrap()
+     .get_wallet()
+     .balance(false, false)
+     .unwrap();
+ assert!(org_taker_balance == Amount::from_btc(0.15).unwrap());
+
+   //Assert the original balance for makers
+    // Calculate Original balance excluding fidelity bonds.
+    // Bonds are created automatically after spawning the maker server.
+    let org_maker_balances = makers
+        .iter()
+        .map(|maker| {
+            maker
+                .get_wallet()
+                .read()
+                .unwrap()
+                .balance(false, false)
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+
+       // Check if utxo list looks good.
+    // Assert other interesting things from the utxo list.
+    assert_eq!(
+        taker
+            .read()
+            .unwrap()
+            .get_wallet()
+            .list_unspent_from_wallet(false, true)
+            .unwrap()
+            .len(),
+        3
+    );
+    makers.iter().for_each(|maker| {
+        let utxo_count = maker
+            .get_wallet()
+            .read()
+            .unwrap()
+            .list_unspent_from_wallet(false, false)
+            .unwrap();
+
+        assert_eq!(utxo_count.len(), 4);
+    });
     // ---- Start Servers and attempt Swap ----
 
     info!("Initiating Maker...");
@@ -101,7 +129,7 @@ async fn test_abort_case_2_move_on_with_other_makers() {
         .collect::<Vec<_>>();
 
     // Start swap
-    thread::sleep(Duration::from_secs(360)); // Take a delay because Makers take time to fully setup.
+    thread::sleep(Duration::from_secs(20)); // Take a delay because Makers take time to fully setup.
     let swap_params = SwapParams {
         send_amount: 500000,
         maker_count: 2,
@@ -117,7 +145,7 @@ async fn test_abort_case_2_move_on_with_other_makers() {
         taker_clone
             .write()
             .unwrap()
-            .do_coinswap(swap_params)
+            .send_coinswap(swap_params)
             .unwrap();
     });
 
@@ -132,21 +160,26 @@ async fn test_abort_case_2_move_on_with_other_makers() {
 
     // ---- After Swap checks ----
 
-    let _ = directory_server_instance.shutdown();
+    //Do balance assertions.
+    makers
+        .iter()
+        .zip(org_maker_balances.iter())
+        .for_each(|(maker, org_balance)| {
+            let new_balance = maker
+                .get_wallet()
+                .read()
+                .unwrap()
+                .balance(false, false)
+                .unwrap();
+            assert_eq!(*org_balance - new_balance, Amount::from_sat(0));
+        });
 
-    thread::sleep(Duration::from_secs(10));
 
-    // TODO: Do balance assertions.
 
     // Maker might not get banned as Taker may not try 6102 for swap. If it does then check its 6102.
     if !taker.read().unwrap().get_bad_makers().is_empty() {
-        let onion_addr_path = PathBuf::from(format!("/tmp/tor-rust-maker{}/hs-dir/hostname", 6102));
-        let mut file = File::open(onion_addr_path).unwrap();
-        let mut onion_addr: String = String::new();
-        file.read_to_string(&mut onion_addr).unwrap();
-        onion_addr.pop();
         assert_eq!(
-            format!("{}:{}", onion_addr, 6102),
+            "localhost:6102",
             taker.read().unwrap().get_bad_makers()[0]
                 .address
                 .to_string()
