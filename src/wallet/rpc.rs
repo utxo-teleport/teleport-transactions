@@ -99,14 +99,15 @@ impl Wallet {
                 let args = [
                     Value::String(wallet_name.clone()),
                     Value::Bool(true),  // Disable Private Keys
-                    Value::Bool(false), // Create a blank wallet
+                    Value::Bool(true), // Create a blank wallet
                     Value::Null,        // Optional Passphrase
                     Value::Bool(false), // Avoid Reuse
-                    Value::Bool(false), // Descriptor Wallet
+                    Value::Bool(true), // Descriptor Wallet
                 ];
                 let _: Value = self.rpc.call("createwallet", &args)?;
             }
-
+            
+            log::info!("[{}] createWalletInfo", wallet_name);
             log::debug!("wallet created: {}", wallet_name);
         }
 
