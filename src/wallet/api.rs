@@ -20,14 +20,8 @@ use bitcoin::{
     Txid, Witness,
 };
 
-use bitcoind::bitcoincore_rpc::{
-    core_rpc_json::{
-        ImportMultiOptions, ImportMultiRequest, ImportMultiRequestScriptPubkey,
-        ListUnspentResultEntry, Timestamp,
-    },
-    Client, RpcApi,
-};
-use serde_json::Value;
+use bitcoind::bitcoincore_rpc::{core_rpc_json::ListUnspentResultEntry, Client, RpcApi};
+use serde_json::{json, Value};
 
 use crate::{
     protocol::contract,
@@ -639,70 +633,49 @@ impl Wallet {
     }
 
     /// Import watch addresses into core wallet. Does not check if the address was already imported.
-    pub(super) fn import_addresses(
+    pub fn import_descriptor_address(
         &self,
         hd_descriptors: &[String],
         swapcoin_descriptors: &[String],
-        contract_scriptpubkeys: &[ScriptBuf],
+        contract_scriptpubkeys: &[String],
     ) -> Result<(), WalletError> {
-        let address_label = self.get_core_wallet_label();
-
         let import_requests = hd_descriptors
             .iter()
-            .map(|desc| ImportMultiRequest {
-                timestamp: Timestamp::Now,
-                descriptor: Some(desc),
-                range: Some((0, (self.get_addrss_import_count() - 1) as usize)),
-                watchonly: Some(true),
-                label: Some(&address_label),
-                ..Default::default()
+            .map(|desc| {
+                json!({
+                    "timestamp": "now",
+                    "desc": desc,
+                })
             })
-            .chain(swapcoin_descriptors.iter().map(|desc| ImportMultiRequest {
-                timestamp: Timestamp::Now,
-                descriptor: Some(desc),
-                watchonly: Some(true),
-                label: Some(&address_label),
-                ..Default::default()
+            .chain(swapcoin_descriptors.iter().map(|desc| {
+                json!({
+                    "timestamp": "now",
+                    "desc": desc,
+                })
             }))
-            .chain(contract_scriptpubkeys.iter().map(|spk| ImportMultiRequest {
-                timestamp: Timestamp::Now,
-                script_pubkey: Some(ImportMultiRequestScriptPubkey::Script(spk)),
-                watchonly: Some(true),
-                label: Some(&address_label),
-                ..Default::default()
+            .chain(contract_scriptpubkeys.iter().map(|desc| {
+                json!({
+                    "timestamp": "now",
+                    "desc": desc,
+                })
             }))
-            .chain(
-                self.store
-                    .fidelity_bond
-                    .iter()
-                    .map(|(_, (_, spk, _))| ImportMultiRequest {
-                        timestamp: Timestamp::Now,
-                        script_pubkey: Some(ImportMultiRequestScriptPubkey::Script(spk)),
-                        watchonly: Some(true),
-                        label: Some(&address_label),
-                        ..Default::default()
-                    }),
-            )
-            .collect::<Vec<ImportMultiRequest>>();
-
-        let result = self.rpc.import_multi(
-            &import_requests,
-            Some(
-                &(ImportMultiOptions {
-                    rescan: Some(false),
-                }),
-            ),
-        )?;
-
-        // Only hard error if it errors, or else log the warning
-        for r in result {
-            if !r.success {
-                log::warn!(target: "Wallet:import_addresses", "{:?}", r.warnings);
-                if let Some(e) = r.error {
-                    return Err(WalletError::Protocol(e.message));
-                }
-            }
-        }
+            .chain(self.store.fidelity_bond.iter().map(|(_, (_, spk, _))| {
+                let descriptor_without_checksum = format!("raw({:x})", spk);
+                let descriptor = self
+                    .rpc
+                    .get_descriptor_info(&descriptor_without_checksum)
+                    .unwrap()
+                    .descriptor;
+                json!({
+                    "timestamp": "now",
+                    "desc": descriptor,
+                })
+            }))
+            .collect();
+        let _res: Vec<Value> = self
+            .rpc
+            .call("importdescriptors", &[import_requests])
+            .unwrap();
         Ok(())
     }
 
@@ -1502,7 +1475,7 @@ impl Wallet {
         &self,
         redeemscript: &ScriptBuf,
     ) -> Result<(), WalletError> {
-        self.import_redeemscript(redeemscript, &WATCH_ONLY_SWAPCOIN_LABEL.to_string())
+        self.import_redeemscript(redeemscript, WATCH_ONLY_SWAPCOIN_LABEL)
     }
 
     /// Imports a multisig redeem script with a descriptor into the wallet.
@@ -1510,37 +1483,18 @@ impl Wallet {
         &self,
         pubkey1: &PublicKey,
         pubkey2: &PublicKey,
-        address_label: &String,
+        _address_label: &str,
     ) -> Result<(), WalletError> {
         let descriptor = self
             .rpc
-            .get_descriptor_info(&format!("wsh(sortedmulti(2,{},{}))", pubkey1, pubkey2))?
-            .descriptor;
-        let result = self
+            .get_descriptor_info(&format!("wsh(sortedmulti(2,{},{}))", pubkey1, pubkey2))?;
+        let import_requests = Value::Array(vec![
+            json!({"desc":descriptor.descriptor,"timestamp":"now"}),
+        ]);
+        let _res: Vec<Value> = self
             .rpc
-            .import_multi(
-                &[ImportMultiRequest {
-                    timestamp: Timestamp::Now,
-                    descriptor: Some(&descriptor),
-                    watchonly: Some(true),
-                    label: Some(address_label),
-                    ..Default::default()
-                }],
-                Some(
-                    &(ImportMultiOptions {
-                        rescan: Some(false),
-                    }),
-                ),
-            )
+            .call("importdescriptors", &[import_requests])
             .unwrap();
-        for r in result {
-            if !r.success {
-                log::warn!(target: "Wallet:import_addresses", "{:?}", r.warnings);
-                if let Some(e) = r.error {
-                    return Err(WalletError::Protocol(e.message));
-                }
-            }
-        }
         Ok(())
     }
 
@@ -1548,32 +1502,16 @@ impl Wallet {
     pub fn import_redeemscript(
         &self,
         redeemscript: &ScriptBuf,
-        address_label: &String,
+        _address_label: &str,
     ) -> Result<(), WalletError> {
         let spk = redeemscript_to_scriptpubkey(redeemscript);
-        let result = self.rpc.import_multi(
-            &[ImportMultiRequest {
-                timestamp: Timestamp::Now,
-                script_pubkey: Some(ImportMultiRequestScriptPubkey::Script(&spk)),
-                redeem_script: Some(redeemscript),
-                watchonly: Some(true),
-                label: Some(address_label),
-                ..Default::default()
-            }],
-            Some(
-                &(ImportMultiOptions {
-                    rescan: Some(false),
-                }),
-            ),
-        )?;
-        for r in result {
-            if !r.success {
-                log::warn!(target: "Wallet:import_addresses", "{:?}", r.warnings);
-                if let Some(e) = r.error {
-                    return Err(WalletError::Protocol(e.message));
-                }
-            }
-        }
+        let descriptor = self
+            .rpc
+            .get_descriptor_info(&format!("raw({:x})", spk))
+            .unwrap()
+            .descriptor;
+        let import_requests = Value::Array(vec![json!({"desc":descriptor,"timestamp":"now"})]);
+        let _res: Vec<Value> = self.rpc.call("importdescriptors", &[import_requests])?;
         Ok(())
     }
 }
