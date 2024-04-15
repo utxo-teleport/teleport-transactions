@@ -1,6 +1,6 @@
 //! Various utility and helper functions for both Taker and Maker.
 
-use std::{env, io::ErrorKind, path::PathBuf, sync::Once};
+use std::{env, io::ErrorKind, path::PathBuf, str::FromStr, sync::Once};
 
 use bitcoin::{
     address::{WitnessProgram, WitnessVersion},
@@ -12,8 +12,11 @@ use bitcoin::{
     },
     Network, PublicKey, ScriptBuf,
 };
-use libtor::{HiddenServiceVersion, LogDestination, LogLevel, Tor, TorAddress, TorFlag};
-use mitosis::JoinHandle;
+use log4rs::{
+    append::{console::ConsoleAppender, file::FileAppender},
+    config::{Appender, Logger, Root},
+    Config,
+};
 
 use std::{
     collections::HashMap,
@@ -49,6 +52,23 @@ pub fn str_to_bitcoin_network(net_str: &str) -> Network {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ConnectionType {
+    TOR,
+    CLEARNET,
+}
+
+impl FromStr for ConnectionType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "tor" => Ok(ConnectionType::TOR),
+            "clearnet" => Ok(ConnectionType::CLEARNET),
+            _ => Err("Invalid connection type".to_string()),
+        }
+    }
+}
 /// Get the system specific home directory.
 pub fn get_home_dir() -> PathBuf {
     dirs::home_dir().expect("home directory expected")
@@ -79,19 +99,48 @@ pub fn seed_phrase_to_unique_id(seed: &str) -> String {
 /// Setup function that will only run once, even if called multiple times.
 pub fn setup_logger() {
     Once::new().call_once(|| {
-        env::set_var("RUST_LOG", "info");
-        env_logger::Builder::from_env(
-            env_logger::Env::default()
-                .default_filter_or("coinswap=info")
-                .default_write_style_or("always"),
-        )
-        // .is_test(true)
-        .init();
-    });
-}
+        env::set_var("RUST_LOG", "coinswap=info");
+        let mut taker_log_dir = get_data_dir().join("taker").join("debug.log");
+        let mut maker_log_dir = get_data_dir().join("maker").join("debug.log");
+        let mut directory_log_dir = get_data_dir().join("directory").join("debug.log");
+        if cfg!(feature = "integration-test") {
+            taker_log_dir = PathBuf::from("/tmp/taker/debug.log");
+            maker_log_dir = PathBuf::from("/tmp/maker/debug.log");
+            directory_log_dir = PathBuf::from("/tmp/directory/debug.log");
+        }
 
-pub fn setup_mitosis() {
-    mitosis::init();
+        let stdout = ConsoleAppender::builder().build();
+        let taker = FileAppender::builder().build(taker_log_dir).unwrap();
+        let maker = FileAppender::builder().build(maker_log_dir).unwrap();
+        let directory = FileAppender::builder().build(directory_log_dir).unwrap();
+        let config = Config::builder()
+            .appender(Appender::builder().build("stdout", Box::new(stdout)))
+            .appender(Appender::builder().build("taker", Box::new(taker)))
+            .appender(Appender::builder().build("maker", Box::new(maker)))
+            .appender(Appender::builder().build("directory", Box::new(directory)))
+            .logger(
+                Logger::builder()
+                    .appender("taker")
+                    .build("coinswap::taker", log::LevelFilter::Info),
+            )
+            .logger(
+                Logger::builder()
+                    .appender("maker")
+                    .build("coinswap::maker", log::LevelFilter::Info),
+            )
+            .logger(
+                Logger::builder()
+                    .appender("directory")
+                    .build("coinswap::market", log::LevelFilter::Info),
+            )
+            .build(
+                Root::builder()
+                    .appender("stdout")
+                    .build(log::LevelFilter::Info),
+            )
+            .unwrap();
+        log4rs::init_config(config).unwrap();
+    });
 }
 
 /// Can send both Taker and Maker messages.
@@ -177,7 +226,7 @@ pub fn get_hd_path_from_descriptor(descriptor: &str) -> Option<(&str, u32, i32)>
     let close = descriptor.find(']');
     if open.is_none() || close.is_none() {
         //unexpected, so printing it to stdout
-        println!("unknown descriptor = {}", descriptor);
+        log::error!("unknown descriptor = {}", descriptor);
         return None;
     }
     let path = &descriptor[open.unwrap() + 1..close.unwrap()];
@@ -188,7 +237,7 @@ pub fn get_hd_path_from_descriptor(descriptor: &str) -> Option<(&str, u32, i32)>
     }
     let addr_type = path_chunks[1].parse::<u32>();
     if addr_type.is_err() {
-        log::debug!(target: "wallet", "unexpected address_type = {}", path);
+        log::error!(target: "wallet", "unexpected address_type = {}", path);
         return None;
     }
     let index = path_chunks[2].parse::<i32>();
@@ -318,44 +367,8 @@ pub fn monitor_log_for_completion(log_dir: PathBuf, pattern: &str) -> io::Result
     }
 }
 
-pub fn spawn_tor(socks_port: u16, port: u16, base_dir: String) -> JoinHandle<()> {
-    let handle = mitosis::spawn(
-        (socks_port, port, base_dir),
-        |(socks_port, port, base_dir)| {
-            let hs_string = format!("{}/hs-dir/", base_dir);
-            let data_dir = format!("{}/", base_dir);
-            let log_dir = format!("{}/log", base_dir);
-            let _handler = Tor::new()
-                .flag(TorFlag::DataDirectory(data_dir))
-                .flag(TorFlag::LogTo(
-                    LogLevel::Notice,
-                    LogDestination::File(log_dir),
-                ))
-                .flag(TorFlag::SocksPort(socks_port))
-                .flag(TorFlag::HiddenServiceDir(hs_string))
-                .flag(TorFlag::HiddenServiceVersion(HiddenServiceVersion::V3))
-                .flag(TorFlag::HiddenServicePort(
-                    TorAddress::Port(port),
-                    None.into(),
-                ))
-                .start();
-        },
-    );
-
-    handle
-}
-
-pub fn kill_tor_handles(handle: JoinHandle<()>) {
-    match handle.kill() {
-        Ok(_) => log::info!("Tor instance terminated successfully"),
-        Err(_) => log::error!("Error occurred while terminating tor instance"),
-    };
-}
-
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use bitcoin::{
         blockdata::{opcodes::all, script::Builder},
         secp256k1::Scalar,

@@ -30,7 +30,7 @@ use bitcoind::{
 use coinswap::{
     maker::{Maker, MakerBehavior},
     taker::{Taker, TakerBehavior},
-    utill::{setup_logger, setup_mitosis, str_to_bitcoin_network},
+    utill::{setup_logger, str_to_bitcoin_network, ConnectionType},
     wallet::RPCConfig,
 };
 
@@ -66,10 +66,12 @@ impl TestFramework {
     /// If no bitcoind conf is provide a default value will be used.
     pub async fn init(
         bitcoind_conf: Option<Conf<'_>>,
-        makers_config_map: HashMap<(u16, u16), MakerBehavior>,
+        makers_config_map: HashMap<(u16, u16, ConnectionType), MakerBehavior>,
         taker_behavior: Option<TakerBehavior>,
     ) -> (Arc<Self>, Arc<RwLock<Taker>>, Vec<Arc<Maker>>) {
-        setup_mitosis();
+        if cfg!(feature = "tor") {
+            coinswap::tor::setup_mitosis();
+        }
         setup_logger();
         // Setup directory
         let temp_dir = get_random_tmp_dir();
@@ -126,6 +128,7 @@ impl TestFramework {
                 None,
                 Some(taker_rpc_config),
                 taker_behavior.unwrap_or_default(),
+                Some(ConnectionType::CLEARNET),
             )
             .unwrap(),
         ));
@@ -139,6 +142,7 @@ impl TestFramework {
                 thread::sleep(Duration::from_secs(5)); // Sleep for some time avoid resource unavailable error.
                 let tor_port = port.0;
                 let socks_port = port.1;
+                let connection_type = port.2;
                 Arc::new(
                     Maker::init(
                         Some(&temp_dir),
@@ -146,6 +150,7 @@ impl TestFramework {
                         Some(maker_rpc_config),
                         Some(tor_port),
                         Some(socks_port),
+                        Some(connection_type),
                         *behavior,
                     )
                     .unwrap(),
@@ -158,8 +163,7 @@ impl TestFramework {
         let tf_clone = test_framework.clone();
         thread::spawn(move || loop {
             thread::sleep(Duration::from_secs(3));
-            tf_clone.generate_1_block();
-            log::debug!("created 1 block");
+            tf_clone.generate_blocks(10);
             if *tf_clone.shutdown.read().unwrap() {
                 log::info!("ending block generation thread");
                 return;
@@ -174,8 +178,8 @@ impl TestFramework {
         &self.bitcoind.client
     }
 
-    /// Generate 1 block in the backend bitcoind.
-    pub fn generate_1_block(&self) {
+    /// Generate Blocks in regtest node.
+    pub fn generate_blocks(&self, n: u64) {
         let mining_address = self
             .bitcoind
             .client
@@ -185,7 +189,7 @@ impl TestFramework {
             .unwrap();
         self.bitcoind
             .client
-            .generate_to_address(1, &mining_address)
+            .generate_to_address(n, &mining_address)
             .unwrap();
     }
 

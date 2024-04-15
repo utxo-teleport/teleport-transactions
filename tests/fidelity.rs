@@ -3,6 +3,7 @@ use bitcoin::{absolute::LockTime, Amount};
 use coinswap::{
     maker::{error::MakerError, start_maker_server, MakerBehavior},
     market::directory::{start_directory_server, DirectoryServer},
+    utill::ConnectionType,
     wallet::{FidelityError, WalletError},
 };
 
@@ -29,14 +30,18 @@ use std::{sync::Arc, thread, time::Duration};
 async fn test_fidelity() {
     // ---- Setup ----
 
-    let makers_config_map = [((6102, 19051), MakerBehavior::Normal)];
+    let makers_config_map = [(
+        (6102, 19051, ConnectionType::CLEARNET),
+        MakerBehavior::Normal,
+    )];
 
     let (test_framework, _, makers) =
         TestFramework::init(None, makers_config_map.into(), None).await;
 
     info!("Initiating Directory Server .....");
 
-    let directory_server_instance = Arc::new(DirectoryServer::new(None).unwrap());
+    let directory_server_instance =
+        Arc::new(DirectoryServer::new(None, Some(ConnectionType::CLEARNET)).unwrap());
     let directory_server_instance_clone = directory_server_instance.clone();
     thread::spawn(move || {
         start_directory_server(directory_server_instance_clone);
@@ -55,7 +60,7 @@ async fn test_fidelity() {
         .get_next_external_address()
         .unwrap();
     test_framework.send_to_address(&maker_addrs, Amount::from_btc(0.04).unwrap());
-    test_framework.generate_1_block();
+    test_framework.generate_blocks(1);
 
     let maker_clone = maker.clone();
     let maker_thread = thread::spawn(move || start_maker_server(maker_clone));
@@ -74,7 +79,7 @@ async fn test_fidelity() {
 
     // Give Maker more funds and check fidelity bond is created at the restart of server.
     test_framework.send_to_address(&maker_addrs, Amount::from_btc(0.04).unwrap());
-    test_framework.generate_1_block();
+    test_framework.generate_blocks(1);
 
     let maker_clone = maker.clone();
     let maker_thread = thread::spawn(move || start_maker_server(maker_clone));
