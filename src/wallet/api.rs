@@ -22,7 +22,7 @@ use bitcoin::{
 
 use bitcoind::bitcoincore_rpc::{
     core_rpc_json::{
-        ImportMultiOptions, ImportMultiRequest, ImportMultiRequestScriptPubkey,
+        ImportDescriptors, ImportMultiOptions, ImportMultiRequest, ImportMultiRequestScriptPubkey,
         ListUnspentResultEntry, Timestamp,
     },
     Client, RpcApi,
@@ -644,62 +644,107 @@ impl Wallet {
             self.get_addrss_import_count());
         let address_label = self.get_core_wallet_label();
 
-        let import_requests = hd_descriptors
-            .iter()
-            .map(|desc| ImportMultiRequest {
-                timestamp: Timestamp::Now,
-                descriptor: Some(desc),
-                range: Some((0, (self.get_addrss_import_count() - 1) as usize)),
-                watchonly: Some(true),
-                label: Some(&address_label),
-                ..Default::default()
-            })
-            .chain(swapcoin_descriptors.iter().map(|desc| ImportMultiRequest {
-                timestamp: Timestamp::Now,
-                descriptor: Some(desc),
-                watchonly: Some(true),
-                label: Some(&address_label),
-                ..Default::default()
-            }))
-            .chain(contract_scriptpubkeys.iter().map(|spk| ImportMultiRequest {
-                timestamp: Timestamp::Now,
-                script_pubkey: Some(ImportMultiRequestScriptPubkey::Script(spk)),
-                watchonly: Some(true),
-                label: Some(&address_label),
-                ..Default::default()
-            }))
-            .chain(
-                self.store
-                    .fidelity_bond
+        // pre-0.21 use legacy wallets
+        if self.rpc.version()? < 210_000 {
+            let import_requests =
+                hd_descriptors
                     .iter()
-                    .map(|(_, (_, spk, _))| ImportMultiRequest {
+                    .map(|desc| ImportMultiRequest {
+                        timestamp: Timestamp::Now,
+                        descriptor: Some(desc),
+                        range: Some((0, (self.get_addrss_import_count() - 1) as usize)),
+                        watchonly: Some(true),
+                        label: Some(&address_label),
+                        ..Default::default()
+                    })
+                    .chain(swapcoin_descriptors.iter().map(|desc| ImportMultiRequest {
+                        timestamp: Timestamp::Now,
+                        descriptor: Some(desc),
+                        watchonly: Some(true),
+                        label: Some(&address_label),
+                        ..Default::default()
+                    }))
+                    .chain(contract_scriptpubkeys.iter().map(|spk| ImportMultiRequest {
                         timestamp: Timestamp::Now,
                         script_pubkey: Some(ImportMultiRequestScriptPubkey::Script(spk)),
                         watchonly: Some(true),
                         label: Some(&address_label),
                         ..Default::default()
+                    }))
+                    .chain(self.store.fidelity_bond.iter().map(|(_, (_, spk, _))| {
+                        ImportMultiRequest {
+                            timestamp: Timestamp::Now,
+                            script_pubkey: Some(ImportMultiRequestScriptPubkey::Script(spk)),
+                            watchonly: Some(true),
+                            label: Some(&address_label),
+                            ..Default::default()
+                        }
+                    }))
+                    .collect::<Vec<ImportMultiRequest>>();
+
+            let result = self.rpc.import_multi(
+                &import_requests,
+                Some(
+                    &(ImportMultiOptions {
+                        rescan: Some(false),
                     }),
-            )
-            .collect::<Vec<ImportMultiRequest>>();
+                ),
+            )?;
 
-        let result = self.rpc.import_multi(
-            &import_requests,
-            Some(
-                &(ImportMultiOptions {
-                    rescan: Some(false),
-                }),
-            ),
-        )?;
+            // Only hard error if it errors, or else log the warning
+            for r in result {
+                if !r.success {
+                    log::warn!(target: "Wallet:import_addresses", "{:?}", r.warnings);
+                    if let Some(e) = r.error {
+                        return Err(WalletError::Protocol(e.message));
+                    }
+                }
+            }
+        } else {
+            // post-0.21 use descriptor wallets
+            let import_requests =
+                hd_descriptors
+                    .iter()
+                    .map(|desc| ImportDescriptors {
+                        timestamp: Timestamp::Now,
+                        descriptor: desc.to_string(),
+                        range: Some((0, (self.get_addrss_import_count() - 1) as usize)),
+                        ..Default::default()
+                    })
+                    .chain(swapcoin_descriptors.iter().map(|desc| ImportDescriptors {
+                        timestamp: Timestamp::Now,
+                        descriptor: desc.to_string(),
+                        ..Default::default()
+                    }))
+                    .chain(contract_scriptpubkeys.iter().map(|spk| ImportDescriptors {
+                        timestamp: Timestamp::Now,
+                        descriptor: format!("raw({:x})", spk),
+                        ..Default::default()
+                    }))
+                    .chain(self.store.fidelity_bond.iter().map(|(_, (_, spk, _))| {
+                        ImportDescriptors {
+                            timestamp: Timestamp::Now,
+                            descriptor: format!("raw({:x})", spk),
+                            ..Default::default()
+                        }
+                    }))
+                    .collect::<Vec<ImportDescriptors>>();
 
-        // Only hard error if it errors, or else log the warning
-        for r in result {
-            if !r.success {
-                log::warn!(target: "Wallet:import_addresses", "{:?}", r.warnings);
-                if let Some(e) = r.error {
-                    return Err(WalletError::Protocol(e.message));
+            if let Some(import_request) = import_requests.first() {
+                let result = self.rpc.import_descriptors(import_request.clone())?;
+
+                // Only hard error if it errors, or else log the warning
+                for r in result {
+                    if !r.success {
+                        log::warn!(target: "Wallet:import_addresses", "{:?}", r.warnings);
+                        if let Some(e) = r.error {
+                            return Err(WalletError::Protocol(e.message));
+                        }
+                    }
                 }
             }
         }
+
         Ok(())
     }
 
