@@ -18,9 +18,7 @@ use bitcoin::secp256k1::rand::{rngs::OsRng, RngCore};
 
 use crate::utill::convert_json_rpc_bitcoin_to_satoshis;
 
-use super::Wallet;
-
-use super::error::WalletError;
+use crate::wallet::{Wallet, WalletError};
 
 pub struct CreateFundingTxesResult {
     pub funding_txes: Vec<Transaction>,
@@ -127,7 +125,6 @@ impl Wallet {
         fee_rate: u64,
     ) -> Result<CreateFundingTxesResult, WalletError> {
         let change_addresses = self.get_next_internal_addresses(destinations.len() as u32)?;
-
         let output_values = Wallet::generate_amount_fractions(destinations.len(), coinswap_amount)?;
 
         self.lock_unspendable_utxos()?;

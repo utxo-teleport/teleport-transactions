@@ -12,9 +12,7 @@ use std::{
     io::{BufReader, BufWriter},
 };
 
-use super::{error::WalletError, fidelity::FidelityBond};
-
-use super::swapcoin::{IncomingSwapCoin, OutgoingSwapCoin};
+use super::{FidelityBond, IncomingSwapCoin, OutgoingSwapCoin, WalletError};
 
 /// Represents the internal data store for a Bitcoin wallet.
 #[derive(Debug, PartialEq, Serialize, Deserialize)]

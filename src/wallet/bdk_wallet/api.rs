@@ -30,11 +30,9 @@ use crate::{
     },
 };
 
-use super::{
-    error::WalletError,
-    rpc::RPCConfig,
-    storage::WalletStore,
-    swapcoin::{IncomingSwapCoin, OutgoingSwapCoin, SwapCoin, WalletSwapCoin},
+use crate::wallet::{
+    error::WalletError, rpc::RPCConfig, storage::WalletStore, IncomingSwapCoin, OutgoingSwapCoin,
+    SwapCoin, WalletSwapCoin,
 };
 
 use std::iter::FromIterator;
@@ -1009,7 +1007,10 @@ impl Wallet {
     }
 
     /// Finds the next unused index in the HD keychain.
-    pub(super) fn find_hd_next_index(&self, keychain: KeychainKind) -> Result<u32, WalletError> {
+    pub(in crate::wallet) fn find_hd_next_index(
+        &self,
+        keychain: KeychainKind,
+    ) -> Result<u32, WalletError> {
         let mut max_index: i32 = -1;
         let all_utxos = self.get_all_utxo()?;
         let mut utxos = self.list_descriptor_utxo_spend_info(Some(&all_utxos))?;

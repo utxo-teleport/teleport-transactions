@@ -28,7 +28,7 @@ use crate::protocol::{
     Hash160,
 };
 
-use super::WalletError;
+use crate::wallet::WalletError;
 
 /// Represents an incoming swapcoin.
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]

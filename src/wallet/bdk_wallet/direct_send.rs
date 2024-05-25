@@ -12,9 +12,7 @@ use bitcoin::{
 };
 use bitcoind::bitcoincore_rpc::{json::ListUnspentResultEntry, RawTx, RpcApi};
 
-use crate::wallet::{api::UTXOSpendInfo, SwapCoin};
-
-use super::{error::WalletError, Wallet};
+use crate::wallet::{api::UTXOSpendInfo, SwapCoin, Wallet, WalletError};
 
 /// Enum representing different options for the amount to be sent in a transaction.
 #[derive(Debug, Clone, PartialEq)]

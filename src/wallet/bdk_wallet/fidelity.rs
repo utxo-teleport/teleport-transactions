@@ -21,10 +21,8 @@ use serde::{Deserialize, Serialize};
 use crate::{
     protocol::messages::FidelityProof,
     utill::redeemscript_to_scriptpubkey,
-    wallet::{UTXOSpendInfo, Wallet},
+    wallet::{UTXOSpendInfo, Wallet, WalletError},
 };
-
-use super::WalletError;
 
 // To (strongly) disincentivize Sybil behavior, the value assessment of the bond
 // is based on the (time value of the bond)^x here x is the bond_value_exponent,
