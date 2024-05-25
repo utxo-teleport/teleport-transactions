@@ -9,7 +9,7 @@ mod rpc;
 mod storage;
 mod swapcoin;
 
-pub use api::{DisplayAddressType, UTXOSpendInfo, Wallet};
+pub use api::{UTXOSpendInfo, Wallet};
 pub use direct_send::{CoinToSpend, Destination, SendAmount};
 pub use error::WalletError;
 pub use fidelity::{FidelityBond, FidelityError};
