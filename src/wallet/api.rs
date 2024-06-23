@@ -3,9 +3,13 @@
 //! Currently, wallet synchronization is exclusively performed through RPC for makers.
 //! In the future, takers might adopt alternative synchronization methods, such as lightweight wallet solutions.
 
-use std::{convert::TryFrom, fs, path::PathBuf, str::FromStr};
-
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    convert::TryFrom,
+    fs,
+    path::PathBuf,
+    str::FromStr,
+};
 
 use bitcoin::{
     bip32::{ChildNumber, DerivationPath, Xpub},
@@ -15,7 +19,6 @@ use bitcoin::{
     sighash::{EcdsaSighashType, SighashCache},
     Address, Amount, OutPoint, PublicKey, Script, ScriptBuf, Transaction, Txid,
 };
-
 use bitcoind::bitcoincore_rpc::{bitcoincore_rpc_json::ListUnspentResultEntry, Client, RpcApi};
 
 use crate::{
@@ -1319,5 +1322,10 @@ impl Wallet {
         }));
 
         Ok(descriptors_to_import)
+    }
+
+    pub fn get_new_address(&self) -> Result<Address, WalletError> {
+        let new_address = self.get_new_address()?;
+        Ok(new_address)
     }
 }

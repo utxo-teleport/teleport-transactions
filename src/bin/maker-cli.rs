@@ -1,4 +1,7 @@
 use clap::Parser;
+use serde::{Deserialize, Serialize};
+use tokio::{io::BufReader, net::TcpStream};
+
 use coinswap::{
     maker::{
         error::MakerError,
@@ -6,8 +9,6 @@ use coinswap::{
     },
     utill::{send_message, setup_logger},
 };
-use serde::{Deserialize, Serialize};
-use tokio::{io::BufReader, net::TcpStream};
 
 #[derive(Serialize, Deserialize, Debug)]
 enum Message {
@@ -43,6 +44,8 @@ enum Commands {
     ContractBalance,
     /// Returns the total fidelity balance
     FidelityBalance,
+    /// Gets a new address
+    NewAddress,
 }
 
 #[tokio::main]
@@ -77,6 +80,9 @@ async fn main() -> Result<(), MakerError> {
         }
         Commands::SwapUtxo => {
             send_rpc_req(&RpcMsgReq::SwapUtxo).await?;
+        }
+        Commands::NewAddress => {
+            send_rpc_req(&RpcMsgReq::NewAddress).await?;
         }
     }
 
