@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1><img alt="/logo" src="https://raw.githubusercontent.com/utxo-teleport/teleport-transactions/master/assets/logo.png" width="25" style="margin:-4px 4px" />Teleport Transactions</h1>
+<h1>Coinswap</h1>
 
 <p>
     Functioning, minimal-viable binaries and libraries to perform a trustless, p2p <a href="https://gist.github.com/chris-belcher/9144bd57a91c194e332fb5ca371d0964">Maxwell-Belcher Coinswap Protocol</a>.
@@ -172,7 +172,7 @@ ln -s ../../git_hooks/pre-commit .git/hooks/pre-commit
 
 ## Community
 
-The dev community lurks in a small corner of Discord [here](https://discord.gg/TSSAB3g4Zf) (say holla, if you drop there from this readme).
+The dev community lurks in a Discord [here](https://discord.gg/Wz42hVmrrK).
 
 Dev discussions predominantly happen via FOSS best practices, and by using Github as the Community Forum.
 
