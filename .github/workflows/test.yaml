@@ -1,7 +1,7 @@
 on:
   push:
     branches:
-    - master
+      - master
   pull_request:
 
 name: test
@@ -9,7 +9,10 @@ name: test
 jobs:
   test_with_codecov:
     name: Run tests with coverage reporting
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -30,10 +33,11 @@ jobs:
           RUSTFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off'
           RUSTDOCFLAGS: '-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off'
         run: cargo test --features=integration-test -- --nocapture
+
       - id: coverage
         name: Generate coverage
         uses: actions-rs/grcov@v0.1.5
-      
+
       # Upload coverage report
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1
