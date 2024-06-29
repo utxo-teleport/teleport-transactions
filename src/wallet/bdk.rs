@@ -181,67 +181,166 @@ type SwapCoinsInfo<'a> = (
 impl Wallet {
     pub fn init(
         path: &PathBuf,
-        rpc_config: &RPCConfig,
         seedphrase: String,
         passphrase: String,
-    ) -> Result<Self, WalletError> {
+        rpc_config: &RPCConfig,
+        wallet_birthday: Option<u64>,
+        network: Network,
+    ) -> Result<Self, NewError> {
         let file_name = path
             .file_name()
             .expect("file name expected")
             .to_str()
             .expect("expected")
             .to_string();
-        let rpc = Client::try_from(rpc_config)?;
-        let wallet_birthday = rpc.get_block_count()?;
         let store = WalletStore::init(
             file_name,
             path,
-            rpc_config.network,
-            seedphrase,
-            passphrase,
-            Some(wallet_birthday),
-        )?;
-        Ok(Self {
-            rpc,
-            wallet_file_path: path.clone(),
-            store,
-        })
-    }
+            network,
+            seedphrase.clone(),
+            passphrase.clone(),
+            wallet_birthday,
+        )
+        .expect("failed to initialise the walletstore");
 
-    /// Load wallet data from file and connects to a core RPC.
-    /// The core rpc wallet name, and wallet_id field in the file should match.
-    pub fn load(rpc_config: &RPCConfig, path: &PathBuf) -> Result<Wallet, WalletError> {
-        let store = WalletStore::read_from_disk(path)?;
-        if rpc_config.wallet_name != store.file_name {
-            return Err(WalletError::Protocol(format!(
-                "Wallet name of database file and core missmatch, expected {}, found {}",
-                rpc_config.wallet_name, store.file_name
-            )));
-        }
-        let rpc = Client::try_from(rpc_config)?;
-        log::info!(
-            "Loaded wallet file {} | External Index = {} | Incoming Swapcoins = {} | Outgoing Swapcoins = {}",
-            store.file_name,
-            store.external_index,
-            store.incoming_swapcoins.len(),
-            store.outgoing_swapcoins.len()
-        );
-        let wallet = Self {
-            rpc,
-            wallet_file_path: path.clone(),
+        let genesis_hash = genesis_block(network).block_hash();
+
+        let secp = Secp256k1::new();
+        let (chain, chain_changeset) = LocalChain::from_genesis_hash(genesis_hash);
+        let mut index = KeychainTxOutIndex::<KeychainKind>::default();
+
+        // create descriptors for each kind from seedpharse & passphrase
+        // containig Xpriv
+
+        let indexed_graph = IndexedTxGraph::new(index.clone());
+
+        let mut persist = Persist::new(());
+        persist.stage(ChangeSet {
+            chain: chain_changeset,
+            indexed_tx_graph: indexed_graph.initial_changeset(),
+            network: Some(network),
+        });
+        persist.commit().map_err(NewError::Persist)?;
+
+        let rpc = Client::try_from(rpc_config).expect("Failed to load Client from rpc config");
+
+        let mut wallet = Wallet {
+            signers: HashMap::default(),
+            chain,
+            indexed_graph,
+            persist,
             store,
+            network,
+            secp: secp.clone(),
+            rpc,
         };
+
+        let kind_descriptor_map = wallet
+            .create_wallet_descriptors()
+            .expect("failed to create descriptors");
+
+        let kind_descriptor_map_ref: HashMap<_, _> = kind_descriptor_map
+            .iter()
+            .map(|(k, v)| (k.clone(), v))
+            .collect();
+        let signer_map =
+            Wallet::create_signers(&mut index, &secp, kind_descriptor_map_ref, network)
+                .map_err(NewError::Descriptor)?;
+
+        wallet.signers = signer_map;
+
         Ok(wallet)
     }
 
-    /// Deletes the wallet file and returns the result as `Ok(())` on success.
-    pub fn delete_wallet_file(&self) -> Result<(), WalletError> {
-        Ok(fs::remove_file(&self.wallet_file_path)?)
+    fn load_from_changeset(
+        store: WalletStore,
+        changeset: ChangeSet,
+        rpc_config: &RPCConfig,
+    ) -> Result<Self, LoadError> {
+        let secp = Secp256k1::new();
+        let network = changeset.network.ok_or(LoadError::MissingNetwork)?;
+        let chain =
+            LocalChain::from_changeset(changeset.chain).map_err(|_| LoadError::MissingGenesis)?;
+        let mut index = KeychainTxOutIndex::<KeychainKind>::default();
+
+        let kind_descriptor_map: HashMap<KeychainKind, Descriptor<DescriptorPublicKey>> = changeset
+            .indexed_tx_graph
+            .indexer
+            .keychains_added
+            .clone()
+            .into_iter()
+            .map(|(kind, descriptor)| (kind, descriptor))
+            .collect();
+
+        // create the signer mapping
+        let signers = Wallet::create_signers(&mut index, &secp, kind_descriptor_map, network)
+            .expect("Can't fail: we passed in valid descriptors, recovered from the changeset");
+
+        let mut indexed_graph = IndexedTxGraph::new(index);
+        indexed_graph.apply_changeset(changeset.indexed_tx_graph);
+
+        let persist = Persist::new(());
+
+        // load rpc
+        let rpc = Client::try_from(rpc_config)
+            .expect("Wallet name of database file and core missmatch, expected {}, found {}");
+
+        Ok(Wallet {
+            signers,
+            chain,
+            indexed_graph,
+            persist,
+            store,
+            network,
+            secp,
+            rpc,
+        })
     }
 
-    /// Returns a reference to the file path of the wallet.
-    pub fn get_file_path(&self) -> &PathBuf {
-        &self.wallet_file_path
+    /// Load [`Wallet`] from the given persistence backend
+    /// It also adds the private keys of the passed-in descriptors to the [`Wallet`].
+    ///
+    /// Note
+    ///
+    /// This function adds private keys from each kind of descriptor, except Swapcoin.
+    /// The Swapcoin descriptor "wsh(sorted_multi(Xpub1, Xpub2))" contains no private keys.
+
+    pub fn load<E>(
+        path: &PathBuf,
+        rpc_config: &RPCConfig,
+        network: Network,
+    ) -> Result<Self, LoadError> {
+        let store =
+            WalletStore::read_from_disk(path).expect("failed to read walletstore from given path");
+
+        let changeset = store
+            .load_from_persistence()
+            .map_err(LoadError::Persist)?
+            .ok_or(LoadError::NotInitialized)?;
+
+        let wallet = Self::load_from_changeset(store, changeset, rpc_config)?;
+
+        // get descriptors containing Xpriv in order to add
+        // add signers manually
+        let kind_descriptor_map = wallet
+            .create_wallet_descriptors()
+            .expect("failed to create descriptors");
+
+        for (keychain, descriptor) in kind_descriptor_map {
+            let (descriptor, keymap) = descriptor
+                .into_wallet_descriptor(&wallet.secp, network)
+                .map_err(|err| LoadError::Descriptor(err))?;
+
+            if !keymap.is_empty() {
+                let signer_container = SignersContainer::build(keymap, &descriptor, &wallet.secp);
+
+                signer_container.signers().into_iter().for_each(|signer| {
+                    wallet.add_signer(keychain, SignerOrdering::default(), *signer)
+                })
+            }
+        }
+
+        Ok(wallet)
     }
 
     /// Update external index and saves to disk.
@@ -249,10 +348,6 @@ impl Wallet {
         self.store.external_index = new_external_index;
         self.save_to_disk()
     }
-
-    // pub fn get_external_index(&self) -> u32 {
-    //     self.external_index
-    // }
 
     /// Update the existing file. Error if path does not exist.
     pub fn save_to_disk(&self) -> Result<(), WalletError> {
