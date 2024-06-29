@@ -3,58 +3,76 @@
 //! Currently, wallet synchronization is exclusively performed through RPC for makers.
 //! In the future, takers might adopt alternative synchronization methods, such as lightweight wallet solutions.
 
+use bdk_chain::{
+    bitcoin::{
+        absolute::LockTime,
+        bip32::{ChildNumber, DerivationPath, Xpriv, Xpub},
+        blockdata::constants::genesis_block,
+        ecdsa::Signature,
+        hashes::{
+            hash160::Hash as Hash160,
+            hex::FromHex,
+            sha256d::{self, Hash as doublesha},
+            Hash,
+        },
+        opcodes,
+        script::{Builder, Instruction},
+        secp256k1::{
+            self,
+            rand::{rngs::OsRng, RngCore},
+            All, Keypair, Message, Secp256k1, SecretKey,
+        },
+        sighash::{EcdsaSighashType, SighashCache},
+        transaction::Version,
+        Address, Amount, Network, OutPoint, PublicKey, Script, ScriptBuf, Sequence, Transaction,
+        TxIn, TxOut, Txid, Witness,
+    },
+    keychain::KeychainTxOutIndex,
+    local_chain::LocalChain,
+    miniscript::{
+        descriptor::{DescriptorXKey, KeyMap, Wildcard},
+        DescriptorPublicKey, ForEachKey,
+    },
+    ConfirmationTimeHeightAnchor, IndexedTxGraph,
+};
+
+use bdk_persist::Persist;
+use bdk_wallet::{
+    descriptor::{Descriptor, DescriptorError, ExtendedDescriptor, IntoWalletDescriptor},
+    signer::{SignerOrdering, SignersContainer, TransactionSigner},
+};
+
+use std::fmt::Debug;
+
 use std::{
+    collections::{HashMap, HashSet},
     convert::TryFrom,
-    fs,
     fs::OpenOptions,
     io::{BufReader, BufWriter},
+    iter,
+    num::ParseIntError,
     path::PathBuf,
     str::FromStr,
+    sync::Arc,
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use std::{
-    collections::{HashMap, HashSet},
-    iter,
-    num::ParseIntError,
-};
-
-use bdk_chain::bitcoin::{
-    absolute::LockTime,
-    bip32::{ChildNumber, DerivationPath, Xpriv, Xpub},
-    ecdsa::Signature,
-    hashes::{
-        hash160::Hash as Hash160,
-        hex::FromHex,
-        sha256d::{self, Hash as doublesha},
-        Hash,
-    },
-    opcodes,
-    script::{Builder, Instruction},
-    secp256k1::{
-        self,
-        rand::{rngs::OsRng, RngCore},
-        Keypair, Message, Secp256k1, SecretKey,
-    },
-    sighash::{EcdsaSighashType, SighashCache},
-    transaction::Version,
-    Address, Amount, Network, OutPoint, PublicKey, Script, ScriptBuf, Sequence, Transaction, TxIn,
-    TxOut, Txid, Witness,
-};
 use bdk_wallet::descriptor::calc_checksum;
 
 use crate::protocol::error::ContractError;
-use bitcoind::bitcoincore_rpc::{
-    bitcoincore_rpc_json::ListUnspentResultEntry, json::CreateRawTransactionInput, Auth, Client,
-    RawTx, RpcApi,
+use bitcoind::{
+    anyhow,
+    bitcoincore_rpc::{
+        bitcoincore_rpc_json::ListUnspentResultEntry, json::CreateRawTransactionInput, Auth,
+        Client, RawTx, RpcApi,
+    },
 };
 
 use crate::{
     protocol::{
-        contract,
         contract::{
-            apply_two_signatures_to_2of2_multisig_spend, create_multisig_redeemscript,
+            self, apply_two_signatures_to_2of2_multisig_spend, create_multisig_redeemscript,
             read_contract_locktime, read_hashlock_pubkey_from_contract,
             read_hashvalue_from_contract, read_pubkeys_from_multisig_redeemscript,
             read_timelock_pubkey_from_contract, sign_contract_tx, verify_contract_tx_sig,
@@ -69,17 +87,23 @@ use serde_json::{json, Value};
 
 use bip39::Mnemonic;
 
+use bdk_wallet::wallet::{LoadError, NewError};
+
 // these subroutines are coded so that as much as possible they keep all their
 // data in the bitcoin core wallet
 // for example which privkey corresponds to a scriptpubkey is stored in hd paths
 
 const HARDENDED_DERIVATION: &str = "m/84'/1'/0'";
 
-/// Represents a Bitcoin wallet with associated functionality and data.
 pub struct Wallet {
-    pub(crate) rpc: Client,
-    wallet_file_path: PathBuf,
-    pub(crate) store: WalletStore,
+    signers: HashMap<KeychainKind, Arc<SignersContainer>>,
+    chain: LocalChain,
+    indexed_graph: IndexedTxGraph<ConfirmationTimeHeightAnchor, KeychainTxOutIndex<KeychainKind>>,
+    persist: Persist<ChangeSet>,
+    store: WalletStore,
+    network: Network,
+    secp: Secp256k1<All>,
+    rpc: Client,
 }
 
 /// Speicfy the keychain derivation path from [`HARDENDED_DERIVATION`]
