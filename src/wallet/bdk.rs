@@ -1452,6 +1452,164 @@ impl Wallet {
     }
 }
 
+//___________________WALLET/DESCRIPTOR______________________________________________________________
+
+/// Wrapper for `IntoWalletDescriptor` that performs additional checks on the keys contained in the
+/// descriptor
+pub(crate) fn into_wallet_descriptor_checked<E: IntoWalletDescriptor>(
+    inner: E,
+    secp: &Secp256k1<All>,
+    network: Network,
+) -> Result<(ExtendedDescriptor, KeyMap), DescriptorError> {
+    let (descriptor, keymap) = inner.into_wallet_descriptor(secp, network)?;
+
+    // Ensure the keys don't contain any hardened derivation steps or hardened wildcards
+    let descriptor_contains_hardened_steps = descriptor.for_any_key(|k| {
+        if let DescriptorPublicKey::XPub(DescriptorXKey {
+            derivation_path,
+            wildcard,
+            ..
+        }) = k
+        {
+            return *wildcard == Wildcard::Hardened
+                || derivation_path
+                    .into_iter()
+                    .any(bdk_wallet::bitcoin::bip32::ChildNumber::is_hardened);
+        }
+
+        false
+    });
+    if descriptor_contains_hardened_steps {
+        return Err(DescriptorError::HardenedDerivationXpub);
+    }
+
+    if descriptor.is_multipath() {
+        return Err(DescriptorError::MultiPath);
+    }
+
+    // Run miniscript's sanity check, which will look for duplicated keys and other potential
+    // issues
+    descriptor.sanity_check()?;
+
+    Ok((descriptor, keymap))
+}
+
+impl Wallet {
+    fn create_wallet_descriptors(&self) -> Result<HashMap<KeychainKind, String>, anyhow::Error> {
+        // create master_key from seed
+
+        let secp = Secp256k1::new();
+
+        // create Xpriv from HARDENDED_DERIVATION path(till account no):
+        let wallet_xpriv = self
+            .store
+            .master_key
+            .derive_priv(
+                &secp,
+                &DerivationPath::from_str(HARDENDED_DERIVATION).unwrap(),
+            )
+            .unwrap();
+
+        // create descriptors for each keychain -> get hashmap.
+        // Note:
+        // created descriptor will contain xpriv not xpub
+
+        let mut kind_descriptor_map = HashMap::new();
+        //  let descriptors =
+        for keychain in KeychainKind::iterator() {
+            let descriptor_without_checksum = match *keychain {
+                KeychainKind::External | KeychainKind::Internal => {
+                    format!("wpkh({}/{}/*)", wallet_xpriv, keychain.index_num())
+                }
+                KeychainKind::SwapCoin => {
+                    let dummy_publickey =
+                        "02c6047f9441ed7d6d3045406e95c07cd85c778e4b8cef3ca7abac09b95c709ee5";
+                    format!(
+                        "wsh(sortedmulti(2,{}/{}/*,{}))",
+                        wallet_xpriv,
+                        keychain.index_num(),
+                        dummy_publickey
+                    )
+                }
+
+                KeychainKind::Fidelity => {
+                    let dummy_locktime = 10000;
+                    format!(
+                        "wsh(and_v(v:pk({}/{}/*),after({})))",
+                        wallet_xpriv,
+                        keychain.index_num(),
+                        dummy_locktime
+                    )
+                }
+                KeychainKind::Contract => {
+                    let (dummy_other_pubkey, dummy_hash_preimage, dummy_locktime) = (
+                        "020202020202020202020202020202020202020202020202020202020202020202",
+                        "1111111111111111111111111111111111111111111111111111111111111111",
+                        1000 as u16,
+                    );
+
+                    format!(
+                        "wsh(andor(pk({}),sha256({}),and_v(v:pk({}/{})/*,older({}))))",
+                        dummy_other_pubkey,
+                        dummy_hash_preimage,
+                        wallet_xpriv,
+                        keychain.index_num(),
+                        dummy_locktime
+                    )
+                }
+            };
+            let descriptor = format!(
+                "{}#{}",
+                descriptor_without_checksum,
+                calc_checksum(&descriptor_without_checksum).unwrap()
+            );
+
+            kind_descriptor_map.insert(*keychain, descriptor);
+        }
+
+        Ok(kind_descriptor_map)
+    }
+}
+
+//_____________________________________WALLET/SIGNER______________________________________________
+impl Wallet {
+    fn create_signers<E>(
+        index: &mut KeychainTxOutIndex<KeychainKind>,
+        secp: &Secp256k1<All>,
+        kind_descriptor_map: HashMap<KeychainKind, E>,
+        network: Network,
+    ) -> Result<HashMap<KeychainKind, Arc<SignersContainer>>, DescriptorError>
+    where
+        E: IntoWalletDescriptor,
+    {
+        let mut signers_map: HashMap<KeychainKind, Arc<SignersContainer>> = HashMap::new();
+
+        for (kind, descriptor) in kind_descriptor_map.into_iter() {
+            let (descriptor, keymap) = into_wallet_descriptor_checked(descriptor, secp, network)?;
+            let signers = Arc::new(SignersContainer::build(keymap, &descriptor, &secp));
+            let _ = index.insert_descriptor(kind, descriptor);
+            signers_map.insert(kind, signers);
+        }
+
+        Ok(signers_map)
+    }
+
+    pub fn get_signers(&self, keychain: KeychainKind) -> Arc<SignersContainer> {
+        Arc::clone(self.signers.get(&keychain).expect("must not fail"))
+    }
+
+    pub fn add_signer(
+        &mut self,
+        keychain: KeychainKind,
+        ordering: SignerOrdering,
+        signer: Arc<dyn TransactionSigner>,
+    ) {
+        let signer_container = Arc::make_mut(self.signers.get_mut(&keychain).expect("must exist"));
+
+        signer_container.add_external(signer.id(&self.secp), ordering, signer);
+    }
+}
+
 //______________________WALLET/FUNDING.rs_______________________________________________________
 
 #[derive(Debug)]
@@ -2171,7 +2329,7 @@ impl Wallet {
             next_index,
             Address::p2wsh(
                 fidelity_redeemscript(&locktime, &fidelity_pubkey).as_script(),
-                self.store.network,
+                self.network,
             ),
             fidelity_pubkey,
         ))
