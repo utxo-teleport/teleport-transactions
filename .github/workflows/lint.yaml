@@ -1,16 +1,18 @@
 on:
   push:
     branches:
-    - master
+      - master
   pull_request:
 
 name: lint
 
 jobs:
-
   fmt:
     name: rust fmt
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Checkout
         uses: actions/checkout@v3

@@ -1,29 +1,25 @@
 on:
   push:
     branches:
-    - master
+      - master
   pull_request:
 
 name: build
 
 jobs:
-
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        rust:
-          - stable
-          - nightly 
-        features:
-          - default
-          - integration-test
+        os: [ubuntu-latest, macos-latest]
+        rust: [stable, nightly]
+        features: [default, integration-test]
     steps:
       - name: checkout
         uses: actions/checkout@v3
       - name: Generate cache key
-        run: echo "${{ matrix.rust }} ${{ matrix.features }}" | tee .cache_key
+        run: echo "${{ matrix.os }}-${{ matrix.rust }}-${{ matrix.features }}" | tee .cache_key
       - name: cache
         uses: actions/cache@v2
         with:
