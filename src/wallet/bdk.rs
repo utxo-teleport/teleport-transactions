@@ -90,11 +90,11 @@ pub enum KeychainKind {
     /// Internal: Derives change addresses.
     Internal,
     /// Fidelity: Generates keypair for fidelity bonds.
-    Fidelity,
+    Fidelity { count: u32 },
     /// SwapCoin: Generates keypair of 2-of-2 multisig in funding transations.
-    SwapCoin,
+    SwapCoin { count: u32 },
     /// Contract: Generates Keypair for hashlock and timelock transactions.
-    Contract,
+    Contract { count: u32 },
 }
 
 impl KeychainKind {
@@ -103,10 +103,39 @@ impl KeychainKind {
         match self {
             Self::External => 0,
             Self::Internal => 1,
-            Self::Fidelity => 2,
-            Self::SwapCoin => 3,
-            Self::Contract => 4,
+            Self::Fidelity { .. } => 2,
+            Self::SwapCoin { .. } => 3,
+            Self::Contract { .. } => 4,
         }
+    }
+
+    /// return Fidelity index no
+    pub fn fidelity_kind_index() -> u32 {
+        KeychainKind::Fidelity { count: 0 }.index_num()
+    }
+
+    /// returns Contract index no
+    pub fn contract_kind_index() -> u32 {
+        KeychainKind::Contract { count: 0 }.index_num()
+    }
+
+    /// returns Swapcoin index no
+    pub fn swapcoin_kind_index() -> u32 {
+        KeychainKind::SwapCoin { count: 0 }.index_num()
+    }
+
+    /// create Fidelity keychain with given count no
+    pub fn create_fidelity_keychain(count: u32) -> Self {
+        KeychainKind::Fidelity { count }
+    }
+
+    /// create Contract keychain with given count no
+    pub fn create_contract_keychain(count: u32) -> Self {
+        KeychainKind::Contract { count }
+    }
+    /// create Swapcoin keychain with given count no
+    pub fn create_swapcoin_keychain(count: u32) -> Self {
+        KeychainKind::SwapCoin { count }
     }
 }
 
@@ -2040,7 +2069,7 @@ impl Wallet {
         let derivation_path = DerivationPath::from_str(&format!(
             "{}/{}",
             HARDENDED_DERIVATION,
-            KeychainKind::Fidelity.index_num()
+            KeychainKind::fidelity_kind_index()
         ))?;
 
         let child_derivation_path = derivation_path.child(ChildNumber::Normal { index });
